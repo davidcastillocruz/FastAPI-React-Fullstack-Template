@@ -4,7 +4,7 @@ import os
 import sys
 from pathlib import Path
 
-from src.core.settings import BASE_DIR, SRC_DIR, LOG_LEVEL
+from src.core import settings
 
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -37,8 +37,8 @@ class AppFormatter(logging.Formatter):
     @staticmethod
     def _location(record: logging.LogRecord) -> str:
         path = Path(record.pathname).resolve()
-        if path.is_relative_to(SRC_DIR):
-            return f"{path.relative_to(BASE_DIR).as_posix()}:{record.lineno}"
+        if path.is_relative_to(settings.SRC_DIR):
+            return f"{path.relative_to(settings.BASE_DIR).as_posix()}:{record.lineno}"
         return record.name
 
     @staticmethod
@@ -90,7 +90,7 @@ def setup_logging() -> None:
             },
         },
         "root": {
-            "level": LOG_LEVEL,
+            "level": settings.LOG_LEVEL,
             "handlers": ["console"],
         },
         "loggers": {
