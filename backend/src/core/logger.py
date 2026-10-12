@@ -9,8 +9,9 @@ from src.core import settings
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 # Every LogRecord has these; anything else came from `extra=`
+# color_message: added by uvicorn on some of its own logs
 _STANDARD_ATTRS = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__) | {
-    "message", "asctime",
+    "message", "asctime", "color_message",
 }
 
 
@@ -39,7 +40,8 @@ class AppFormatter(logging.Formatter):
         path = Path(record.pathname).resolve()
         if path.is_relative_to(settings.SRC_DIR):
             return f"{path.relative_to(settings.BASE_DIR).as_posix()}:{record.lineno}"
-        return record.name
+        # uvicorn logs regular messages through "uvicorn.error", it's not an error
+        return "uvicorn" if record.name == "uvicorn.error" else record.name
 
     @staticmethod
     def _extras(record: logging.LogRecord) -> dict:
