@@ -9,7 +9,7 @@ from src.api.dependencies import get_client_ip
 from src.api.routers.email_requests_router import router as email_requests_router
 from src.core import request_context
 from src.core.settings import settings
-from src.core.errors import error_response, setup_error_handlers
+from src.core.errors import error_response, setup_error_handlers, setup_openapi
 from src.core.languages import setup_language_system
 from src.core.limiter import limiter
 from src.core.logger import setup_logging
@@ -46,6 +46,7 @@ app = FastAPI(
 
 app.state.limiter = limiter
 setup_error_handlers(app)
+setup_openapi(app)
 
 app.include_router(email_requests_router)
 

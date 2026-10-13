@@ -9,6 +9,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.core.languages import get_error_detail
 from src.api.dependencies import get_language
+from src.shared.schemas import ErrorResponse
 
 # Every error answers {"detail": "..."} translated to the user's language,
 # the same shape FastAPI uses for its own errors
@@ -67,3 +68,30 @@ def setup_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(StarletteHTTPException, http_error_handler)
+
+
+# FastAPI documents its own 422 ({"detail": [...]}) on every route that receives data,
+# but validation_error_handler answers {"detail": "..."}: the docs point those 422 to ErrorResponse
+def setup_openapi(app: FastAPI) -> None:
+    def openapi() -> dict:
+        # Generated once, on the first visit to the docs
+        if app.openapi_schema:
+            return app.openapi_schema
+
+        schema = FastAPI.openapi(app)
+        schemas = schema.get("components", {}).get("schemas", {})
+
+        if schemas.pop("HTTPValidationError", None):
+            schemas.pop("ValidationError", None)
+            schemas["ErrorResponse"] = ErrorResponse.model_json_schema()
+            for operations in schema["paths"].values():
+                for operation in operations.values():
+                    response = operation.get("responses", {}).get("422")
+                    if response:
+                        response["content"]["application/json"]["schema"] = {
+                            "$ref": "#/components/schemas/ErrorResponse"
+                        }
+
+        return schema
+
+    app.openapi = openapi
