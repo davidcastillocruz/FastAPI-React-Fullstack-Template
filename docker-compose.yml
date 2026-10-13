@@ -1,0 +1,37 @@
+# Development: docker compose up --build
+services:
+  db:
+    image: postgres:17
+    # Creates the user and the database the first time, with the credentials of .env.db
+    env_file: ./backend/.env.db
+    # Open on your computer too, to connect with a database client
+    ports:
+      - "5433:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    # Ready means accepting connections, not just started
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env.api
+      - ./backend/.env.db
+    ports:
+      - "8000:8000"
+    # Your code inside the container: a saved change reloads the API
+    volumes:
+      - ./backend:/app
+    # Logs with colors in docker compose logs
+    tty: true
+    # The migrations need the database ready
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:
