@@ -32,6 +32,24 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
+      mailpit:
+        condition: service_started
+
+  # Counters of the rate limiter, shared by every worker
+  redis:
+    image: redis:8
+
+  # Catches every email the API sends, see them at http://localhost:8025
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "8025:8025"
+    environment:
+      # Accepts the MAIL_USERNAME and MAIL_PASSWORD of .env.api without TLS, it's only for development
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
 
 volumes:
   db_data:
