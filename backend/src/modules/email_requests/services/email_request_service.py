@@ -8,9 +8,12 @@ from src.core.email import send_email
 from src.core.languages import get_error_detail, get_response
 from src.emails.test_email import build_test_email
 from src.modules.email_requests.repositories import email_request_repository as repository
+from src.modules.email_requests.schemas.email_request_schemas import EmailRequestResponse
 from src.shared.schemas import MessageResponse
 
 logger = logging.getLogger(__name__)
+
+PAGE_SIZE = 10
 
 
 # 409 when the email has already asked for a test email
@@ -43,3 +46,10 @@ async def create_email_request(
     background_tasks.add_task(send_email, subject, [email], body)
 
     return MessageResponse(message=get_response("EMAIL_REQUEST_CREATED", language)["message"])
+
+
+# One page of email requests, page 1 is the first one
+async def get_email_requests(db: AsyncSession, page: int) -> list[EmailRequestResponse]:
+    offset = (page - 1) * PAGE_SIZE
+    email_requests = await repository.get_email_requests(db, offset, PAGE_SIZE)
+    return [EmailRequestResponse.model_validate(email_request) for email_request in email_requests]

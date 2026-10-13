@@ -15,3 +15,14 @@ async def create_email_request(db: AsyncSession, email: str) -> EmailRequestMode
     db.add(email_request)
     await db.commit()
     return email_request
+
+
+# Newest first, id breaks ties so the pages never repeat or skip a row
+async def get_email_requests(db: AsyncSession, offset: int, limit: int) -> list[EmailRequestModel]:
+    result = await db.scalars(
+        select(EmailRequestModel)
+        .order_by(EmailRequestModel.created_at.desc(), EmailRequestModel.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return list(result)
