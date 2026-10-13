@@ -10,6 +10,7 @@ from src.core.errors import error_response, setup_error_handlers
 from src.core.languages import setup_language_system
 from src.core.limiter import limiter
 from src.core.logger import setup_logging
+from src.database import engine
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -21,6 +22,8 @@ async def lifespan(app: FastAPI):
     setup_language_system()
     yield
     # --- Shutdown ---
+    # Closes the connections of the database pool
+    await engine.dispose()
 
 
 show_docs = settings.APP_MODE != "production"
