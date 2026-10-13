@@ -4,15 +4,25 @@ import os
 import sys
 from pathlib import Path
 
+from src.core import request_context
 from src.core.settings import BASE_DIR, SRC_DIR, settings
 
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 # Every LogRecord has these; anything else came from `extra=`
 # color_message: added by uvicorn on some of its own logs
+# request_id, client_ip: added by RequestContextFilter, shown in their own column
 _STANDARD_ATTRS = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__) | {
-    "message", "asctime", "color_message",
+    "message", "asctime", "color_message", "request_id", "client_ip",
 }
+
+
+# Adds the id and the client IP of the current request to every log line ("-" outside a request)
+class RequestContextFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.request_id = request_context.request_id.get()
+        record.client_ip = request_context.client_ip.get()
+        return True
 
 
 class AppFormatter(logging.Formatter):
@@ -56,6 +66,7 @@ class AppFormatter(logging.Formatter):
         line = " | ".join([
             self._paint(self.formatTime(record, self.datefmt), self.DIM),
             self._paint(f"{record.levelname:<8}", color),
+            self._paint(f"{getattr(record, 'request_id', '-')} {getattr(record, 'client_ip', '-')}", self.DIM),
             self._paint(self._location(record), self.CYAN),
             record.getMessage(),
         ])
@@ -85,10 +96,14 @@ def setup_logging() -> None:
                 "use_colors": use_colors,
             },
         },
+        "filters": {
+            "request_context": {"()": RequestContextFilter},
+        },
         "handlers": {
             "console": {
                 "class": "logging.StreamHandler",
                 "formatter": "app",
+                "filters": ["request_context"],
             },
         },
         "root": {

@@ -1,10 +1,12 @@
 import logging
 import time
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 
 from src.api.dependencies import get_client_ip
+from src.core import request_context
 from src.core.settings import settings
 from src.core.errors import error_response, setup_error_handlers
 from src.core.languages import setup_language_system
@@ -45,17 +47,25 @@ app.state.limiter = limiter
 setup_error_handlers(app)
 
 
+# Gives every request an id and logs it: method, path, status and duration
+# The id and the client IP go in every log line written while the request is handled
+# (see core/request_context.py), and the client gets the id in the X-Request-ID header
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start = time.perf_counter()
-    extra = {"ip": get_client_ip(request)}
+    request_id = uuid.uuid4().hex[:8]
+    request_context.request_id.set(request_id)
+    request_context.client_ip.set(get_client_ip(request))
+    extra = {}
 
     try:
         response = await call_next(request)
     except Exception:
         extra["duration_ms"] = round((time.perf_counter() - start) * 1000, 1)
         logger.exception("%s %s 500", request.method, request.url.path, extra=extra)
-        return error_response(request, "INTERNAL_SERVER_ERROR", 500)
+        response = error_response(request, "INTERNAL_SERVER_ERROR", 500)
+        response.headers["X-Request-ID"] = request_id
+        return response
 
     extra["duration_ms"] = round((time.perf_counter() - start) * 1000, 1)
     message = "%s %s %d"
@@ -68,4 +78,5 @@ async def log_requests(request: Request, call_next):
     else:
         logger.info(message, *args, extra=extra)
 
+    response.headers["X-Request-ID"] = request_id
     return response
