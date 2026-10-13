@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from src.core.languages import get_exception
+from src.core.languages import get_error_detail
 from src.api.dependencies import get_language
 
 # Every error answers {"detail": "..."} translated to the user's language,
@@ -26,7 +26,7 @@ def error_response(
 ) -> JSONResponse:
     language = get_language(request, request.query_params.get("lang"))
     return JSONResponse(
-        {"detail": get_exception(name=name, language=language, args=args)},
+        {"detail": get_error_detail(name=name, language=language, args=args)},
         status_code=status_code
     )
 
@@ -49,7 +49,7 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
 
 
 # Translates the routing errors above,
-# any other HTTPException (like our translated 409) keeps FastAPI's default handling
+# any other HTTPException (like the ones raised by the services) keeps FastAPI's default handling
 async def http_error_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     name = ROUTING_ERRORS.get(exc.status_code)
     # Only Starlette's own text ("Not Found"...), a custom 404 of ours keeps its message

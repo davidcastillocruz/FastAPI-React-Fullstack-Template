@@ -144,5 +144,5 @@ def get_response(name: str, language: str, args: dict[str, tuple] | None = None)
 
 
 # The "detail" text of an error response, fails if the entry has no "detail"
-def get_exception(name: str, language: str, args: dict[str, tuple] | None = None) -> str:
+def get_error_detail(name: str, language: str, args: dict[str, tuple] | None = None) -> str:
     return get_response(name, language, args)["detail"]
