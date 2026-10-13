@@ -12,6 +12,9 @@ from src.core.limiter import limiter
 from src.core.logger import setup_logging
 from src.database import engine
 
+# Registers every model before the first query, so relationships between models always resolve
+import src.models  # noqa: F401
+
 setup_logging()
 logger = logging.getLogger(__name__)
 
