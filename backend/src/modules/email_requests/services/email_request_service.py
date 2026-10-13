@@ -1,0 +1,45 @@
+import logging
+
+from fastapi import BackgroundTasks, HTTPException, status
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.core.email import send_email
+from src.core.languages import get_error_detail, get_response
+from src.emails.test_email import build_test_email
+from src.modules.email_requests.repositories import email_request_repository as repository
+from src.shared.schemas import MessageResponse
+
+logger = logging.getLogger(__name__)
+
+
+# 409 when the email has already asked for a test email
+def _already_requested(language: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=get_error_detail("EMAIL_ALREADY_REQUESTED", language)
+    )
+
+
+# Saves the email and sends it a test email after the response
+async def create_email_request(
+    db: AsyncSession, email: str, language: str, background_tasks: BackgroundTasks
+) -> MessageResponse:
+    # "Ana@Test.dev" and "ana@test.dev" are the same email
+    email = email.lower()
+
+    if await repository.get_email_request_by_email(db, email):
+        raise _already_requested(language)
+
+    try:
+        email_request = await repository.create_email_request(db, email)
+    except IntegrityError:
+        # Two requests with the same email at the same time: the unique constraint stops the second one
+        raise _already_requested(language) from None
+
+    logger.info("Email request saved", extra={"email_request_id": email_request.id})
+
+    subject, body = build_test_email(language)
+    background_tasks.add_task(send_email, subject, [email], body)
+
+    return MessageResponse(message=get_response("EMAIL_REQUEST_CREATED", language)["message"])

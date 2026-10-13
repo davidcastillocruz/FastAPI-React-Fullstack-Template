@@ -1,0 +1,14 @@
+{
+    "TEST_EMAIL": {
+        "en": {
+            "subject": "Your test email",
+            "title": "It works!",
+            "text": "This email was sent by the FastAPI React template."
+        },
+        "es": {
+            "subject": "Tu email de prueba",
+            "title": "¡Funciona!",
+            "text": "Este email lo ha enviado la plantilla de FastAPI y React."
+        }
+    }
+}

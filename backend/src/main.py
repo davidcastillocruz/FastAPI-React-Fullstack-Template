@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 
 from src.api.dependencies import get_client_ip
+from src.api.routers.email_requests_router import router as email_requests_router
 from src.core import request_context
 from src.core.settings import settings
 from src.core.errors import error_response, setup_error_handlers
@@ -45,6 +46,8 @@ app = FastAPI(
 
 app.state.limiter = limiter
 setup_error_handlers(app)
+
+app.include_router(email_requests_router)
 
 
 # Gives every request an id and logs it: method, path, status and duration
