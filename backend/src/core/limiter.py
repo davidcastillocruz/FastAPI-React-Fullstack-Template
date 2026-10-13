@@ -1,6 +1,6 @@
 from slowapi import Limiter
 
-from src.core import settings
+from src.core.settings import settings
 from src.api.dependencies import get_client_ip
 
 # Rate limiter, its counters are stored in RATE_LIMIT_STORAGE_URI (Redis in Docker)

@@ -3,7 +3,7 @@ from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-from src.core import settings
+from src.core.settings import settings
 
 # Async engine using asyncpg
 engine = create_async_engine(

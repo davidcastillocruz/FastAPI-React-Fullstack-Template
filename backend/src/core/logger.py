@@ -4,7 +4,7 @@ import os
 import sys
 from pathlib import Path
 
-from src.core import settings
+from src.core.settings import BASE_DIR, SRC_DIR, settings
 
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -38,8 +38,8 @@ class AppFormatter(logging.Formatter):
     @staticmethod
     def _location(record: logging.LogRecord) -> str:
         path = Path(record.pathname).resolve()
-        if path.is_relative_to(settings.SRC_DIR):
-            return f"{path.relative_to(settings.BASE_DIR).as_posix()}:{record.lineno}"
+        if path.is_relative_to(SRC_DIR):
+            return f"{path.relative_to(BASE_DIR).as_posix()}:{record.lineno}"
         # uvicorn logs regular messages through "uvicorn.error", it's not an error
         return "uvicorn" if record.name == "uvicorn.error" else record.name
 

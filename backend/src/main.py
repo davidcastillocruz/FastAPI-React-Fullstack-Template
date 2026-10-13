@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 
 from src.api.dependencies import get_client_ip
-from src.core import settings
+from src.core.settings import settings
 from src.core.errors import error_response, setup_error_handlers
 from src.core.languages import setup_language_system
 from src.core.limiter import limiter

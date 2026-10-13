@@ -1,6 +1,6 @@
 from fastapi import Request
 
-from src.core import settings
+from src.core.settings import settings
 
 
 # Client IP for logging and rate limiting

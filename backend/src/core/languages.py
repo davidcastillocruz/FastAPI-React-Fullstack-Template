@@ -2,7 +2,7 @@ import json
 import logging
 from pathlib import Path
 
-from src.core import settings
+from src.core.settings import BASE_DIR, SRC_DIR, settings
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ LANGUAGE_DATA: dict[str, dict[str, dict[str, str]]] = {}
 
 # Reads one translations file, stops startup if it can't be read or isn't a JSON object
 def _read_translations_file(file: Path) -> dict:
-    path = file.relative_to(settings.BASE_DIR).as_posix()
+    path = file.relative_to(BASE_DIR).as_posix()
 
     try:
         with file.open("r", encoding="utf-8") as f:
@@ -50,10 +50,10 @@ def _read_translations_file(file: Path) -> dict:
 def setup_language_system() -> None:
     global LANGUAGE_DATA
 
-    files = sorted(settings.SRC_DIR.rglob("translations/*_translations.json"))
+    files = sorted(SRC_DIR.rglob("translations/*_translations.json"))
     if not files:
-        logger.critical("No translations files found", extra={"path": settings.SRC_DIR.relative_to(settings.BASE_DIR).as_posix()})
-        raise FileNotFoundError(f"No translations/*_translations.json files in {settings.SRC_DIR}")
+        logger.critical("No translations files found", extra={"path": SRC_DIR.relative_to(BASE_DIR).as_posix()})
+        raise FileNotFoundError(f"No translations/*_translations.json files in {SRC_DIR}")
 
     available = set(settings.AVAILABLE_LANGUAGES)
     data: dict[str, dict[str, dict[str, str]]] = {}
@@ -61,7 +61,7 @@ def setup_language_system() -> None:
     sources: dict[str, str] = {}
 
     for file in files:
-        path = file.relative_to(settings.BASE_DIR).as_posix()
+        path = file.relative_to(BASE_DIR).as_posix()
 
         for name, languages in _read_translations_file(file).items():
             # Same name in two files: one would silently replace the other -> stop startup

@@ -3,7 +3,7 @@ import logging
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
 from fastapi_mail.errors import ConnectionErrors
 
-from src.core import settings
+from src.core.settings import settings
 
 logger = logging.getLogger(__name__)
 
