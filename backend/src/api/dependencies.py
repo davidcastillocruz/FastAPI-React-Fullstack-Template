@@ -1,4 +1,6 @@
-from fastapi import Request
+from typing import Annotated
+
+from fastapi import Depends, Request
 
 from src.core.settings import settings
 
@@ -45,3 +47,7 @@ def get_language(request: Request, lang: str | None = None) -> str:
 
     # 4. Fallback
     return settings.MAIN_LANGUAGE
+
+
+# Language of the request, in an endpoint: language: Language
+Language = Annotated[str, Depends(get_language)]

@@ -18,8 +18,16 @@ conf = ConnectionConfig(
 )
 
 
+# Email for the logs without the personal data: "ana@test.dev" -> "a***@test.dev"
+def _mask_email(email: str) -> str:
+    name, at, domain = email.partition("@")
+    return f"{name[:1]}***{at}{domain}" if at else "***"
+
+
 # Runs as a background task, after the response: errors are logged, not raised (nobody would catch them)
 async def send_email(subject: str, recipients: list[str], body: str) -> None:
+    masked = [_mask_email(recipient) for recipient in recipients]
+
     try:
         message = MessageSchema(
             subject=subject,
@@ -39,7 +47,7 @@ async def send_email(subject: str, recipients: list[str], body: str) -> None:
         return
 
     except Exception:
-        logger.exception("Failed to send email", extra={"recipients": recipients, "subject": subject})
+        logger.exception("Failed to send email", extra={"recipients": masked, "subject": subject})
         return
 
-    logger.info("Email sent", extra={"recipients": recipients, "subject": subject})
+    logger.info("Email sent", extra={"recipients": masked, "subject": subject})
