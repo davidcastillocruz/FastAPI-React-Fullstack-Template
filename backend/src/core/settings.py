@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Annotated, ClassVar, Literal, Self
 from urllib.parse import quote
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # backend/ folder: backend/src/core/settings.py -> parents[2]
@@ -11,52 +11,55 @@ SRC_DIR = BASE_DIR / "src"
 
 
 # Every field is read from the environment variable with its name, converted to its type and validated:
-# a wrong value stops the app on startup with a clear error
+# a missing or wrong value stops the app on startup with a clear error.
+# No defaults: every variable must be in the .env files, a forgotten secret can't fall back to a known value
 class Settings(BaseSettings):
     # In Docker the variables come from env_file; outside it, from these files.
     # A variable of the environment wins over the files, and variables without a field are ignored
     model_config = SettingsConfigDict(
         env_file=(BASE_DIR / ".env.api", BASE_DIR / ".env.db"),
         extra="ignore",
+        # Errors say which variable is wrong and why, without printing the values (passwords...)
+        hide_input_in_errors=True,
     )
 
     # App info
-    APP_TITLE: str = "FastAPI-React-Template"
-    APP_DESCRIPTION: str = "A fullstack development template"
+    APP_TITLE: str
+    APP_DESCRIPTION: str
     # ClassVar: not read from the environment, the version goes with the code
     APP_VERSION: ClassVar[str] = "1.0.0"
 
     # Deploy: any other value stops the app, a typo must not start it as development
     # (public docs, debug logs, mail without TLS)
-    APP_MODE: Literal["development", "production"] = "development"
+    APP_MODE: Literal["development", "production"]
 
     # Database: POSTGRES_* come from .env.db, the same file the db container uses
     # to create the user and the database
-    POSTGRES_USER: str = "postgres"
-    POSTGRES_PASSWORD: str = "1234"
-    POSTGRES_DB: str = "app"
-    DATABASE_HOST: str = "db"
-    DATABASE_PORT: int = 5432
-    DATABASE_POOL_SIZE: int = 5
-    DATABASE_MAX_OVERFLOW: int = 10
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_DB: str
+    DATABASE_HOST: str
+    DATABASE_PORT: int
+    DATABASE_POOL_SIZE: int = Field(ge=1)
+    DATABASE_MAX_OVERFLOW: int = Field(ge=0)
 
     # Languages, AVAILABLE_LANGUAGES is written "en,es"
     # (NoDecode: read as plain text, not as a JSON list)
-    MAIN_LANGUAGE: str = "en"
-    AVAILABLE_LANGUAGES: Annotated[list[str], NoDecode] = ["en", "es"]
+    MAIN_LANGUAGE: str
+    AVAILABLE_LANGUAGES: Annotated[list[str], NoDecode]
 
     # Where the rate limiter keeps its counters: redis:// shares them between all the workers,
     # memory:// keeps one counter per worker
-    RATE_LIMIT_STORAGE_URI: str = "memory://"
+    RATE_LIMIT_STORAGE_URI: str
 
     # Mail, the booleans accept true/false, 1/0, yes/no...
-    MAIL_USERNAME: str = "fastapi@react.dev"
-    MAIL_PASSWORD: str = "password"
-    MAIL_FROM: str = "fastapi@react.dev"
-    MAIL_SERVER: str = "smtp.gmail.com"
-    MAIL_PORT: int = 465
-    MAIL_START_TLS: bool = False
-    MAIL_SSL_TLS: bool = True
+    MAIL_USERNAME: str
+    MAIL_PASSWORD: str
+    MAIL_FROM: str
+    MAIL_SERVER: str
+    MAIL_PORT: int
+    MAIL_START_TLS: bool
+    MAIL_SSL_TLS: bool
 
     # "Production " or "ES" are accepted as "production" and "es"
     @field_validator("APP_MODE", "MAIN_LANGUAGE", mode="before")
