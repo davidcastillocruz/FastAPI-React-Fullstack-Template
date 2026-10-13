@@ -42,6 +42,19 @@ class AppFormatter(logging.Formatter):
         super().__init__(datefmt=datefmt)
         self.use_colors = use_colors
 
+    # Control characters written as text: a line break inside a message or an extra (e.g. a path with %0A)
+    # would fake a new log line, and an ANSI code (\x1b[...) would change the colors of the terminal
+    _CONTROL_CHARS = {
+        **{code: f"\\x{code:02x}" for code in [*range(0x20), *range(0x7f, 0xa0)]},
+        ord("\n"): "\\n",
+        ord("\r"): "\\r",
+        ord("\t"): "\\t",
+    }
+
+    @classmethod
+    def _escape(cls, value: object) -> str:
+        return str(value).translate(cls._CONTROL_CHARS)
+
     def _paint(self, text: str, color: str) -> str:
         return f"{color}{text}{self.RESET}" if self.use_colors else text
 
@@ -66,15 +79,16 @@ class AppFormatter(logging.Formatter):
         line = " | ".join([
             self._paint(self.formatTime(record, self.datefmt), self.DIM),
             self._paint(f"{record.levelname:<8}", color),
-            self._paint(f"{getattr(record, 'request_id', '-')} {getattr(record, 'client_ip', '-')}", self.DIM),
+            # Escaped too: the client IP may come from a header one day (behind a proxy)
+            self._paint(self._escape(f"{getattr(record, 'request_id', '-')} {getattr(record, 'client_ip', '-')}"), self.DIM),
             self._paint(self._location(record), self.CYAN),
-            record.getMessage(),
+            self._escape(record.getMessage()),
         ])
 
         extras = self._extras(record)
         if extras:
             line += " | " + " ".join(
-                f"{self._paint(k, self.MAGENTA)}={v}" for k, v in extras.items()
+                f"{self._paint(k, self.MAGENTA)}={self._escape(v)}" for k, v in extras.items()
             )
 
         if record.exc_info:
