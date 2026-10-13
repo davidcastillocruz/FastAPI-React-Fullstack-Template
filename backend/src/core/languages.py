@@ -12,13 +12,24 @@ logger = logging.getLogger(__name__)
 LANGUAGE_DATA: dict[str, dict[str, dict[str, str]]] = {}
 
 
+# json.load keeps only the last of two equal keys without saying anything: a repeated response
+# or text inside the same file would silently replace the other one -> stop startup
+def _reject_repeated_keys(pairs: list[tuple[str, object]]) -> dict:
+    keys = [key for key, _ in pairs]
+    repeated = sorted({key for key in keys if keys.count(key) > 1})
+    if repeated:
+        raise ValueError(f"Repeated keys: {repeated}")
+    return dict(pairs)
+
+
 # Reads one translations file, stops startup if it can't be read or isn't a JSON object
 def _read_translations_file(file: Path) -> dict:
     path = file.relative_to(BASE_DIR).as_posix()
 
     try:
-        with file.open("r", encoding="utf-8") as f:
-            data = json.load(f)
+        # utf-8-sig also reads the files that some editors save with a BOM at the start
+        with file.open("r", encoding="utf-8-sig") as f:
+            data = json.load(f, object_pairs_hook=_reject_repeated_keys)
 
     except json.JSONDecodeError as exc:
         logger.critical(
@@ -30,6 +41,11 @@ def _read_translations_file(file: Path) -> dict:
 
     except UnicodeDecodeError:
         logger.critical("Translations file is not valid UTF-8", extra={"path": path})
+        raise
+
+    # After the two above: JSONDecodeError and UnicodeDecodeError are ValueErrors too
+    except ValueError as exc:
+        logger.critical("Repeated key in translations file: %s", exc, extra={"path": path})
         raise
 
     except OSError:
@@ -104,6 +120,15 @@ def setup_language_system() -> None:
                     )
                     raise TypeError(f"Expected a dict in {path} [{name}][{language}], got {type(texts).__name__}")
 
+                # Every text is a string, a number or a list would reach the client as it is
+                for key, text in texts.items():
+                    if not isinstance(text, str):
+                        logger.critical(
+                            "Invalid translation, every text must be a string",
+                            extra={"path": path, "entry": name, "language": language, "text": key}
+                        )
+                        raise TypeError(f"Expected a string in {path} [{name}][{language}][{key}], got {type(text).__name__}")
+
             # Same texts in every language (detail, message...), or asking for one of them would fail later
             texts_by_language = {language: sorted(languages[language]) for language in sorted(available)}
             if len({tuple(texts) for texts in texts_by_language.values()}) > 1:
@@ -113,7 +138,34 @@ def setup_language_system() -> None:
                 )
                 raise ValueError(f"Response '{name}' in {path} has different texts in each language: {texts_by_language}")
 
-            data[name] = languages
+            # Same number of %s in every language, or filling the text would fail in one of them
+            # (a 500 only for the users of that language). %% is a literal %, not a placeholder
+            for key in languages[settings.MAIN_LANGUAGE]:
+                placeholders = {
+                    language: languages[language][key].replace("%%", "").count("%s") for language in sorted(available)
+                }
+                if len(set(placeholders.values())) > 1:
+                    logger.critical(
+                        "Response has a different number of %s in each language",
+                        extra={"path": path, "entry": name, "text": key, "placeholders": placeholders}
+                    )
+                    raise ValueError(f"Response '{name}' in {path} [{key}] has a different number of %s in each language: {placeholders}")
+
+                # A text with %s must be fillable: a literal % next to a %s has to be written %%
+                # ("50% off for %s" would fail when filled, "50%% off for %s" works)
+                count = placeholders[settings.MAIN_LANGUAGE]
+                for language in sorted(available) if count else []:
+                    try:
+                        languages[language][key] % (("x",) * count)
+                    except (TypeError, ValueError):
+                        logger.critical(
+                            "Response can't be filled, write a literal % as %%",
+                            extra={"path": path, "entry": name, "language": language, "text": key}
+                        )
+                        raise ValueError(f"Response '{name}' in {path} [{language}][{key}] can't be filled, write a literal % as %%") from None
+
+            # Only the available languages, the extra ones were not validated
+            data[name] = {language: languages[language] for language in available}
             sources[name] = path
 
     LANGUAGE_DATA = data
@@ -137,7 +189,7 @@ def get_response(name: str, language: str, args: dict[str, tuple] | None = None)
         logger.error("Response not found", extra={"entry": name, "language": language})
         raise
 
-    except TypeError:
+    except (TypeError, ValueError):
         # Wrong number/type of placeholder args
         logger.error("Invalid arguments for response", extra={"entry": name, "language": language, "format_args": args})
         raise
