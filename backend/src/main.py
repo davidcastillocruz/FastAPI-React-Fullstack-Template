@@ -4,6 +4,7 @@ import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.dependencies import get_client_ip
 from src.api.routers.email_requests_router import router as email_requests_router
@@ -84,3 +85,17 @@ async def log_requests(request: Request, call_next):
 
     response.headers["X-Request-ID"] = request_id
     return response
+
+
+# Added after log_requests so it wraps it: the 500 built there also gets the CORS headers,
+# otherwise the browser would hide it behind a CORS error
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    # The browser sends the cookies, like the "language" one
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    # Readable from the frontend, to report the id of a failed request
+    expose_headers=["X-Request-ID"]
+)

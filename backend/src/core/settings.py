@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     # memory:// keeps one counter per worker
     RATE_LIMIT_STORAGE_URI: str
 
+    # Frontends allowed to call the API from the browser, written "http://localhost:5173,https://app.com"
+    CORS_ORIGINS: Annotated[list[str], NoDecode]
+
     # Mail, the booleans accept true/false, 1/0, yes/no...
     MAIL_USERNAME: str
     MAIL_PASSWORD: str
@@ -73,6 +76,14 @@ class Settings(BaseSettings):
     def split_languages(cls, value: str | list[str]) -> list[str]:
         codes = value.split(",") if isinstance(value, str) else value
         return [code.strip().lower() for code in codes if code.strip()]
+
+    # "http://Localhost:5173/, " -> ["http://localhost:5173"]
+    # The browser sends the origin in lowercase and without a trailing slash, written otherwise it would never match
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def split_origins(cls, value: str | list[str]) -> list[str]:
+        origins = value.split(",") if isinstance(value, str) else value
+        return [origin.strip().rstrip("/").lower() for origin in origins if origin.strip()]
 
     # Checks that need several fields, after each one is valid
     @model_validator(mode="after")
