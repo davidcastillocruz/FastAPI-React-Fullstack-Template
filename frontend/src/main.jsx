@@ -4,6 +4,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router';
 
 import LanguageProvider from '@/languages/LanguageProvider';
 import HomePage from '@/pages/HomePage/HomePage';
+import NotFoundPage from '@/pages/NotFoundPage/NotFoundPage';
 import ThemeProvider from '@/themes/ThemeProvider';
 import { applyTheme, getInitialTheme } from '@/themes/theme';
 import '@/themes/themes.css';
@@ -13,6 +14,8 @@ import '@/index.css';
 const router = createBrowserRouter([
   { path: '/', element: <HomePage /> },
   // { path: '/about', element: <AboutPage /> },
+  // Any other path: React Router ranks it below every other route, wherever it is
+  { path: '*', element: <NotFoundPage /> },
 ]);
 
 // Before the first render, so React never paints the page with the wrong theme
