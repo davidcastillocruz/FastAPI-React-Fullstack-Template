@@ -1,4 +1,8 @@
 {
+  "pageTitle": {
+    "en": "Departures from localhost · FastAPI & React",
+    "es": "Salidas desde localhost · FastAPI & React"
+  },
   "languageLabel": {
     "en": "Language",
     "es": "Idioma"

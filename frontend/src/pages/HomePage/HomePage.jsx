@@ -158,6 +158,9 @@ export default function HomePage() {
 
   return (
     <div className={styles.page}>
+      {/* React 19 moves it to <head>: the tab title follows the language */}
+      <title>{t('pageTitle')}</title>
+
       <header className={styles.header}>
         <span className={styles.wordmark}>
           FastAPI <span className={styles.amp}>&amp;</span> React

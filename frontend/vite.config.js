@@ -12,4 +12,9 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  test: {
+    // A fake browser (document, cookies...) for the tests, setup.js resets it after each one
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.js'],
+  },
 });
