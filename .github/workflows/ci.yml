@@ -1,4 +1,4 @@
-# Runs the backend tests on every push and pull request, on a clean GitHub machine
+# Checks the backend and the frontend on every push and pull request, on a clean GitHub machine
 name: CI
 
 on:
@@ -57,3 +57,33 @@ jobs:
         env:
           DATABASE_HOST: localhost
         run: pytest
+
+  frontend:
+    name: Frontend lint, tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # Same version as frontend/Dockerfile
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Lint
+        run: npx oxlint src
+
+      - name: Run the tests
+        run: npm test
+
+      # The build fails on a broken import or a syntax error that the dev server would only show when opening the page
+      - name: Build
+        run: npm run build
