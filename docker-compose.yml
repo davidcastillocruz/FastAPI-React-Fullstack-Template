@@ -37,6 +37,17 @@ services:
       mailpit:
         condition: service_started
 
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      # Your code inside the container: a saved change reloads the page
+      - ./frontend:/app
+      # The container keeps its own node_modules: the one of your computer has macOS binaries
+      - /app/node_modules
+    tty: true
+
   # Counters of the rate limiter, shared by every worker
   redis:
     image: redis:8
