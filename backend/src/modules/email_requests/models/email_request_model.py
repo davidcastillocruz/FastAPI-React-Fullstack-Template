@@ -5,7 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from src.database import Base
 
-# Database model to save email request from de demo service
+# Database model of the email requests of the demo
 class EmailRequestModel(Base):
     __tablename__ = "email_requests"
     id: Mapped[int] = mapped_column(primary_key=True)

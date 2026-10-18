@@ -7,8 +7,8 @@ from src.core.settings import BASE_DIR, SRC_DIR, settings
 logger = logging.getLogger(__name__)
 
 
-# Every *_translations.json inside src/: core/translations has the shared ones,
-# modules/<module>/translations the ones of each module, one file per service
+# Every *_translations.json inside src/: core/translations has the shared ones, emails/translations
+# the texts of the emails, modules/<module>/translations the ones of each module
 LANGUAGE_DATA: dict[str, dict[str, dict[str, str]]] = {}
 
 
