@@ -35,7 +35,7 @@ The example is a small demo, **"Departures from localhost"**: you write an email
 - **Async database** with SQLAlchemy 2 and asyncpg, a naming convention for constraints, and **Alembic** migrations applied automatically on startup.
 - **Translated errors**: every error of the API answers `{"detail": "..."}` in the user's language (404, 405, 422, 429, 500 and your own), and the OpenAPI docs show the real shape.
 - **Language system**: `?lang=` > `language` cookie > `Accept-Language` > default. Translation files are checked on startup (missing languages, different keys, wrong placeholders, repeated keys).
-- **Structured logging**: one line per log with a request id and the client IP, extras as `key=value`, emails masked when sending, control characters escaped, colors in the terminal. Every response carries an `X-Request-ID` header.
+- **Structured logging**: one line per log with a request id and the client IP, extras as `key=value`, emails masked when sending, control characters escaped, colors in the terminal. Every response carries an `X-Request-ID` header (except CORS preflights, which the CORS middleware answers before the request reaches the app).
 - **Rate limiting** with slowapi, counters in Redis (with an in-memory fallback).
 - **Background emails** with fastapi-mail, caught by Mailpit in development.
 - **Tests** with pytest against a real PostgreSQL test database.
@@ -46,13 +46,13 @@ The example is a small demo, **"Departures from localhost"**: you write an email
 - **Theme system**: light and dark themes as CSS variables. Follows the system live until the user picks one, saved in a cookie, applied before the first render.
 - **Language system**: same languages and cookie as the backend, so the API always answers in the language of the page. `useT()` translates with named placeholders and checks every translation file in development.
 - **Axios instance** with a timeout that sends the cookies, so the backend's errors arrive in the language of the page.
-- **Component packages**: every page and component lives in its own folder with its JSX, CSS module and translations.
+- **Component packages**: every page and component lives in its own folder with its JSX, CSS module, translations (when it has text of its own) and tests.
 - **Tests** with Vitest, jsdom and Testing Library.
 
 ### Tooling
 
 - **Docker Compose** for the whole stack, with hot reload in the backend and the frontend.
-- **GitHub Actions**: backend tests, frontend lint, tests and build on every push.
+- **GitHub Actions**: backend tests and migrations check, frontend lint, tests and build on every push.
 
 ## Tech stack
 
@@ -66,7 +66,7 @@ The example is a small demo, **"Departures from localhost"**: you write an email
 
 ## Quick start
 
-**Requirements:** [Docker](https://www.docker.com/) with Docker Compose. Node is only needed to run the frontend outside Docker.
+**Requirements:** [Docker](https://www.docker.com/) with Docker Compose. Everything, tests included, runs inside the containers.
 
 ```bash
 git clone https://github.com/davidcastillocruz/FastAPI-React-Fullstack-Template.git
@@ -87,7 +87,9 @@ Then open:
 | Mailpit (sent emails) | http://localhost:8025 |
 | PostgreSQL (from a database client) | `localhost:5433` |
 
-Saving a file reloads the API or the page. The migrations run every time the backend starts.
+Open the web at `localhost`, not `127.0.0.1`: `localhost:5173` is the origin allowed in `CORS_ORIGINS`, from any other one every call to the API is blocked.
+
+Saving a Python file in `backend/src` reloads the API, and saving a file in `frontend/src` reloads the page. The backend's translation files are only read on startup: after changing one, run `docker compose restart backend`. The migrations run every time the backend starts.
 
 ## Project structure
 
@@ -96,25 +98,27 @@ Saving a file reloads the API or the page. The migrations run every time the bac
 ├── backend/
 │   ├── src/
 │   │   ├── main.py              # app, request logging middleware, CORS, routers
-│   │   ├── core/                # settings, logger, languages, errors, limiter, email
-│   │   ├── api/                 # dependencies (DbSession, Language) and one router per module
+│   │   ├── core/                # settings, logger, request context, languages, errors, limiter, email, shared translations
+│   │   ├── api/                 # dependencies (Language, client IP) and one router per module
 │   │   ├── modules/             # features: models, schemas, repositories, services, translations
 │   │   ├── emails/              # email templates and their translations
 │   │   ├── shared/schemas.py    # MessageResponse {message}, ErrorResponse {detail}
-│   │   ├── database.py          # async engine, Base, get_db
+│   │   ├── database.py          # async engine, Base, get_db, DbSession
 │   │   └── models.py            # imports every model for SQLAlchemy and Alembic
 │   ├── alembic/                 # migrations
 │   └── tests/
 ├── frontend/
 │   └── src/
 │       ├── main.jsx             # providers and every route
+│       ├── index.css            # global styles
 │       ├── themes/              # theme variables, provider and useTheme
 │       ├── languages/           # language provider, useLanguage and useT
 │       ├── utils/               # api (axios) and cookies
 │       ├── pages/               # one folder per page
 │       ├── components/          # one folder per shared component
 │       ├── hooks/               # shared hooks
-│       └── features/            # big features with their own pages, components and hooks
+│       ├── features/            # big features with their own pages, components and hooks
+│       └── test/                # setup of the frontend tests
 ├── .github/workflows/ci.yml
 └── docker-compose.yml
 ```
@@ -126,9 +130,13 @@ Saving a file reloads the API or the page. The migrations run every time the bac
 Each feature is a module in `backend/src/modules/<module>/`, split in layers. Use `email_requests` as the reference.
 
 1. **Model** in `models/`, then import it in `src/models.py` so Alembic sees it.
-2. **Migration**: generate it, review the file in `alembic/versions/` and restart the backend to apply it.
+2. **Migration**: generate it, review the file in `alembic/versions/` and apply it with `docker compose restart backend` (the hot reload doesn't run the migrations).
    ```bash
    docker compose exec backend alembic revision --autogenerate -m "create users"
+   ```
+   On Linux with Docker Engine the container creates the file as root, so you can't edit it without `sudo`. Run it as your user instead (Docker Desktop on macOS and Windows doesn't need it):
+   ```bash
+   docker compose exec -u "$(id -u):$(id -g)" backend alembic revision --autogenerate -m "create users"
    ```
 3. **Schemas** in `schemas/`: what the endpoints receive and return.
 4. **Repository** in `repositories/`: only database queries, no `try/except` (closing the session rolls back).
@@ -170,7 +178,9 @@ The request id and the client IP are added to every line automatically. Keep the
 
 ### Configuration
 
-Every setting lives in `src/core/settings.py` and is **required**. A new setting goes in `Settings`, in your `.env` file and in its `.example`.
+Every setting lives in `src/core/settings.py` and is **required**. A new setting goes in `Settings`, in `backend/.env.api` (or `backend/.env.db` if PostgreSQL uses it too) and in its `.example`, and in `VALID` in `backend/tests/test_settings.py`: the settings tests ignore the `.env` files and only use the values listed there.
+
+Docker reads the `.env` files only when it creates the containers: after changing a value, run `docker compose up -d` (a restart keeps the old values). The `POSTGRES_*` values only create the user and the database the first time; to change them later, run `docker compose down -v`, which deletes the data of the database.
 
 ## Frontend guide
 
@@ -182,7 +192,8 @@ Every page and component is a folder with everything it needs:
 pages/ProfilePage/
 ├── ProfilePage.jsx
 ├── ProfilePageStyle.module.css
-└── ProfilePageTranslation.json
+├── ProfilePageTranslation.json   # only if it has text of its own
+└── ProfilePage.test.jsx
 ```
 
 Pages are registered in `src/main.jsx`:
@@ -191,8 +202,11 @@ Pages are registered in `src/main.jsx`:
 const router = createBrowserRouter([
   { path: '/', element: <HomePage /> },
   { path: '/profile', element: <ProfilePage /> },
+  { path: '*', element: <NotFoundPage /> },
 ]);
 ```
+
+Keep the `*` route: it shows `NotFoundPage` for any other path.
 
 ### Translations
 
@@ -201,11 +215,16 @@ const router = createBrowserRouter([
 ```
 
 ```jsx
+import { useT } from '@/languages/useT';
+import translations from './ProfilePageTranslation.json';
+
 const t = useT(translations);
 t('greeting', { name: 'Ana' });
 ```
 
 `const { language, setLanguage } = useLanguage()` reads or changes the language without reloading the page.
+
+To add a language, add it to `AVAILABLE_LANGUAGES` in `backend/.env.api` and its `.example`, to `LANGUAGES` in `frontend/src/languages/languages.js`, and to every translation file of the backend and the frontend (the backend doesn't start while one is missing it). Keep `MAIN_LANGUAGE` the same on both sides.
 
 ### Themes
 
@@ -236,17 +255,17 @@ try {
 ## Testing
 
 ```bash
-docker compose exec backend pytest    # backend, against its own test database
-cd frontend && npm test                # frontend
+docker compose exec backend pytest     # backend, against its own test database
+docker compose exec frontend npm test  # frontend
 ```
 
-The backend tests create and use an `app_test` database in the same PostgreSQL, so your development data is never touched. `npx vitest` keeps the frontend tests running while you code.
+The backend tests create and use an `app_test` database in the same PostgreSQL, so your development data is never touched. `docker compose exec frontend npx vitest` keeps the frontend tests running while you code.
 
 ### Continuous integration
 
 On every push and pull request, GitHub Actions runs two jobs in parallel:
 
-- **Backend**: pytest against a PostgreSQL 17 service.
+- **Backend**: `alembic upgrade head` and `alembic check` (a model changed without its migration fails), then pytest against a PostgreSQL 17 service.
 - **Frontend**: oxlint, Vitest and the production build.
 
 ## Useful commands
@@ -256,11 +275,12 @@ On every push and pull request, GitHub Actions runs two jobs in parallel:
 | Start everything | `docker compose up --build` |
 | Stop everything | `docker compose down` |
 | Backend logs | `docker compose logs -f backend` |
-| New migration | `docker compose exec backend alembic revision --autogenerate -m "..."` |
-| Undo the last migration | `docker compose exec backend alembic downgrade -1` |
+| New migration | `docker compose exec backend alembic revision --autogenerate -m "..."` (on Linux with Docker Engine, add `-u "$(id -u):$(id -g)"` after `exec`) |
+| Apply the migrations | `docker compose restart backend` |
+| Undo the last migration | `docker compose exec backend alembic downgrade -1` (then delete or edit its file in `alembic/versions/`: the backend runs `alembic upgrade head` every time it starts) |
 | Add a frontend dependency | `docker compose exec frontend npm install <package>` |
-| Reinstall the frontend dependencies of the container | `docker compose up --build -V` |
-| Lint the frontend | `cd frontend && npx oxlint src` |
+| Reinstall the frontend dependencies of the container (after a pull that changes `package.json`) | `docker compose up --build -V` |
+| Lint the frontend | `docker compose exec frontend npm run lint` |
 
 ---
 
