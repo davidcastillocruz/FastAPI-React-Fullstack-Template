@@ -1,5 +1,5 @@
 import { isCancel } from 'axios';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import SplitFlap from '@/components/SplitFlap/SplitFlap';
 import { LANGUAGES } from '@/languages/languages';
@@ -20,7 +20,7 @@ const PAGE_SIZE = 10;
 const GITHUB_USER = 'davidcastillocruz';
 const MAILPIT_URL = 'http://localhost:8025';
 
-// The stops of an email request, with the port each service listens on in development
+// The stops of an email request, with the port each one is reachable at from your computer in development
 const STATIONS = [
   { name: 'React', port: '5173' },
   { name: 'FastAPI', port: '8000' },
@@ -82,10 +82,20 @@ export default function HomePage() {
   const [requests, setRequests] = useState(null);
   const [page, setPage] = useState(1);
   // Notice of the last page that failed, with that page so "Try again" asks for it again
+  // and a count of the failures, so the same error twice is announced again
   const [listError, setListError] = useState(null);
   const [listLoading, setListLoading] = useState(false);
   // AbortController of the page being loaded
   const listRequest = useRef(null);
+  // A retry that works removes "Try again" with the focus on it: the focus goes to the board title instead
+  const boardTitle = useRef(null);
+  const focusBoardAfterRetry = useRef(false);
+  // Current language for loadPage: after a send it runs from the handler of an older render,
+  // whose language may have changed while the email was on its way
+  const languageRef = useRef(language);
+  useLayoutEffect(() => {
+    languageRef.current = language;
+  }, [language]);
 
   // Text of a notice in the current language. A backend text only exists in the language it was asked in
   function noticeText(notice) {
@@ -100,6 +110,8 @@ export default function HomePage() {
     listRequest.current?.abort();
     const controller = new AbortController();
     listRequest.current = controller;
+    // The request goes with the language cookie of now: a translated error comes in this language
+    const requestLanguage = languageRef.current;
     setListLoading(true);
 
     try {
@@ -109,7 +121,7 @@ export default function HomePage() {
       setListError(null);
     } catch (error) {
       if (isCancel(error)) return;
-      setListError({ ...requestError(error, language), page: newPage });
+      setListError((current) => ({ ...requestError(error, requestLanguage), page: newPage, attempt: (current?.attempt ?? 0) + 1 }));
     } finally {
       if (listRequest.current === controller) setListLoading(false);
     }
@@ -123,11 +135,19 @@ export default function HomePage() {
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!listError && focusBoardAfterRetry.current) boardTitle.current.focus();
+    focusBoardAfterRetry.current = false;
+  }, [listError]);
+
   async function handleSubmit(event) {
     event.preventDefault();
+    // The button is only aria-disabled (it keeps the focus), Enter in the input also submits: one send at a time
+    if (trip === 'sending') return;
     setTripId((id) => id + 1);
 
-    if (!EMAIL_REGEX.test(email.trim())) {
+    const sentEmail = email.trim();
+    if (!EMAIL_REGEX.test(sentEmail)) {
       setResult({ key: 'invalidEmail' });
       setTrip('rejected');
       return;
@@ -136,10 +156,11 @@ export default function HomePage() {
     setResult(null);
     setTrip('sending');
     try {
-      const { data } = await api.post('/email-requests', { email: email.trim() });
+      const { data } = await api.post('/email-requests', { email: sentEmail });
       setResult({ text: data.message, language });
       setTrip('sent');
-      setEmail('');
+      // Only if it still holds the address sent: something typed while it was on its way stays
+      setEmail((current) => (current.trim() === sentEmail ? '' : current));
       loadPage(1);
     } catch (error) {
       setResult(requestError(error, language));
@@ -155,6 +176,9 @@ export default function HomePage() {
   // Always PAGE_SIZE rows, the empty ones stay blank like an unused line of a real board
   const rows = Array.from({ length: PAGE_SIZE }, (_, index) => requests?.[index] ?? null);
   const isEmpty = requests?.length === 0;
+  // A full page means there may be older ones. The pager buttons are aria-disabled, so they check it themselves
+  const hasNewer = !listLoading && page > 1;
+  const hasOlder = !listLoading && requests?.length === PAGE_SIZE;
 
   return (
     <div className={styles.page}>
@@ -198,7 +222,7 @@ export default function HomePage() {
             <p className={styles.lede}>{t('lede')}</p>
 
             {/* noValidate: the regex above validates, not the browser */}
-            <form onSubmit={handleSubmit} noValidate className={styles.form}>
+            <form onSubmit={handleSubmit} noValidate>
               <label htmlFor="email" className={styles.label}>
                 {t('destination')}
               </label>
@@ -215,13 +239,15 @@ export default function HomePage() {
                   className={styles.input}
                 />
                 {/* Both labels take the same place, the button keeps the width of the longest one */}
-                <button type="submit" disabled={trip === 'sending'} className={styles.send}>
+                {/* aria-disabled instead of disabled: a disabled button loses the keyboard focus */}
+                <button type="submit" aria-disabled={trip === 'sending'} className={styles.send}>
                   <span aria-hidden={trip === 'sending'}>{t('send')}</span>
                   <span aria-hidden={trip !== 'sending'}>{t('sending')}</span>
                 </button>
               </div>
               <p id="email-result" className={styles.result} data-error={isError || undefined} aria-live="polite">
-                {resultText}
+                {/* A new text on every attempt: the same error twice in a row is announced again */}
+                <span key={tripId}>{resultText}</span>
                 {trip === 'sent' && resultText && (
                   <>
                     {' · '}
@@ -267,20 +293,24 @@ export default function HomePage() {
 
         <section className={styles.departures} aria-labelledby="departures-title">
           <div className={styles.boardHeader}>
-            <h2 id="departures-title" className={styles.boardTitle}>
+            <h2 id="departures-title" ref={boardTitle} tabIndex={-1} className={styles.boardTitle}>
               {t('departures')}
             </h2>
             <div className={styles.pager}>
               <span className={styles.pageNumber}>{t('page', { page })}</span>
-              <button type="button" className={styles.pageButton} disabled={listLoading || page === 1}
-                onClick={() => loadPage(page - 1)}>
+              <button
+                type="button"
+                className={styles.pageButton}
+                aria-disabled={!hasNewer}
+                onClick={() => hasNewer && loadPage(page - 1)}
+              >
                 {t('newer')}
               </button>
               <button
                 type="button"
                 className={styles.pageButton}
-                disabled={listLoading || requests?.length !== PAGE_SIZE}
-                onClick={() => loadPage(page + 1)}
+                aria-disabled={!hasOlder}
+                onClick={() => hasOlder && loadPage(page + 1)}
               >
                 {t('older')}
               </button>
@@ -288,9 +318,22 @@ export default function HomePage() {
           </div>
 
           {listError && (
-            <p className={styles.listError} role="alert">
-              {t('loadError')}. {listErrorText && `${listErrorText}. `}
-              <button type="button" className={styles.retry} disabled={listLoading} onClick={() => loadPage(listError.page)}>
+            <p className={styles.listError}>
+              {/* A new alert on every failure: the same text in the same alert wouldn't be read again */}
+              <span key={listError.attempt} role="alert">
+                {t('loadError')}. {listErrorText && `${listErrorText}. `}
+              </span>
+              {/* The button stays the same element, so it keeps the focus while it retries */}
+              <button
+                type="button"
+                className={styles.retry}
+                aria-disabled={listLoading}
+                onClick={() => {
+                  if (listLoading) return;
+                  focusBoardAfterRetry.current = true;
+                  loadPage(listError.page);
+                }}
+              >
                 {t('tryAgain')}
               </button>
             </p>
@@ -319,17 +362,17 @@ export default function HomePage() {
                     return (
                       <tr key={index}>
                         <td>
-                          <span className={styles.srOnly}>{request.id}</span>
+                          <span className="sr-only">{request.id}</span>
                           <SplitFlap text={String(request.id).padStart(ID_CELLS, '0')} length={ID_CELLS} delay={delay} />
                         </td>
                         <td>
-                          <time dateTime={request.created_at} className={styles.srOnly}>
+                          <time dateTime={request.created_at} className="sr-only">
                             {date.toLocaleString(language, { dateStyle: 'medium', timeStyle: 'short' })}
                           </time>
                           <SplitFlap text={boardTime(date, language)} length={TIME_CELLS} delay={delay} />
                         </td>
                         <td>
-                          <span className={styles.srOnly}>{request.email}</span>
+                          <span className="sr-only">{request.email}</span>
                           <SplitFlap text={request.email} length={EMAIL_CELLS} delay={delay} />
                         </td>
                       </tr>
@@ -347,7 +390,7 @@ export default function HomePage() {
                         <SplitFlap text="" length={TIME_CELLS} delay={delay} />
                       </td>
                       <td>
-                        {message && <span className={styles.srOnly}>{message}</span>}
+                        {message && <span className="sr-only">{message}</span>}
                         <SplitFlap text={message} length={EMAIL_CELLS} delay={delay} />
                       </td>
                     </tr>

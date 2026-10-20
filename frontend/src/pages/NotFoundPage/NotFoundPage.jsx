@@ -20,7 +20,7 @@ export default function NotFoundPage() {
       <title>{t('pageTitle')}</title>
 
       <div className={styles.board}>
-        <span className={styles.srOnly}>{board}</span>
+        <span className="sr-only">{board}</span>
         <SplitFlap text={board} length={BOARD_CELLS} />
       </div>
 

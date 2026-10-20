@@ -34,6 +34,16 @@ body {
   scrollbar-color: var(--color-border) var(--color-bg);
 }
 
+/* Visible only to screen readers: real text next to visual pieces like the departures board */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 ::selection {
   background: var(--color-primary);
   color: var(--color-primary-text);

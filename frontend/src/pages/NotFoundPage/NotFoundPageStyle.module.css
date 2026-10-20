@@ -4,15 +4,6 @@
   padding: clamp(64px, 12vw, 128px) clamp(16px, 4vw, 48px);
 }
 
-.srOnly {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
 /* Same board as the home page, a single row: the font size sets the size of the flaps */
 .board {
   padding: clamp(12px, 2.4vw, 24px);

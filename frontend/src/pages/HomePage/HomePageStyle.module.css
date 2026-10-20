@@ -4,19 +4,11 @@
   padding-inline: clamp(16px, 4vw, 48px);
 }
 
-.srOnly {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
 /* Header */
 
 .header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -86,15 +78,15 @@
 
 .language:active,
 .themeButton:active,
-.pageButton:active:not(:disabled),
-.send:active:not(:disabled) {
+.pageButton:active:not([aria-disabled='true']),
+.send:active:not([aria-disabled='true']) {
   transform: scale(0.97);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .language:hover:not([aria-pressed='true']),
   .themeButton:hover,
-  .pageButton:hover:not(:disabled) {
+  .pageButton:hover:not([aria-disabled='true']) {
     background: var(--color-surface);
     color: var(--color-text);
   }
@@ -119,6 +111,8 @@
 
 .intro {
   display: grid;
+  /* minmax(0, ...): the form and the text shrink with the screen instead of pushing it wider */
+  grid-template-columns: minmax(0, 1fr);
   gap: 40px;
   margin-top: clamp(32px, 5vw, 56px);
 }
@@ -206,7 +200,7 @@
   visibility: hidden;
 }
 
-.send:disabled {
+.send[aria-disabled='true'] {
   opacity: 0.6;
   cursor: progress;
 }
@@ -433,8 +427,8 @@
   font-weight: 600;
 }
 
-.pageButton:disabled,
-.retry:disabled {
+.pageButton[aria-disabled='true'],
+.retry[aria-disabled='true'] {
   color: var(--color-text-muted);
   opacity: 0.5;
   cursor: not-allowed;
@@ -561,7 +555,9 @@
     transition: none;
   }
 
-  .route .envelope {
+  /* The same selectors as the animations: a shorter one loses against them */
+  .route[data-trip='sending'] .envelope,
+  .route[data-error] .envelope {
     animation: none;
   }
 }

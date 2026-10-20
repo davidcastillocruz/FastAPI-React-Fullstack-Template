@@ -1,4 +1,4 @@
-import { memo, useEffect, useState, useSyncExternalStore } from 'react';
+import { memo, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import styles from './SplitFlapStyle.module.css';
 
@@ -37,20 +37,22 @@ function flapsTo(from, to) {
 function FlapCell({ target, delay, reducedMotion }) {
   // shown: character on the cell, previous: the one folding away on top of it, flips: remounts the fold
   const [flap, setFlap] = useState({ shown: ' ', previous: ' ', flips: 0 });
+  // The character on the cell right now. Not flap.shown: a flap of the previous target can land after
+  // the render with the new target and before its effect, and the drum would start from a stale character
+  const shownRef = useRef(' ');
 
+  // Only a new target starts the drum, the shown character changes on every flap
   useEffect(() => {
     if (reducedMotion) return;
 
-    const steps = flapsTo(flap.shown, target);
+    const steps = flapsTo(shownRef.current, target);
     const timers = steps.map((char, index) =>
-      setTimeout(
-        () => setFlap((current) => ({ shown: char, previous: current.shown, flips: current.flips + 1 })),
-        delay + index * FLAP_MS,
-      ),
+      setTimeout(() => {
+        shownRef.current = char;
+        setFlap((current) => ({ shown: char, previous: current.shown, flips: current.flips + 1 }));
+      }, delay + index * FLAP_MS),
     );
     return () => timers.forEach(clearTimeout);
-    // Only a new target starts the drum, the shown character changes on every flap
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [target, delay, reducedMotion]);
 
   const shown = reducedMotion ? target : flap.shown;
