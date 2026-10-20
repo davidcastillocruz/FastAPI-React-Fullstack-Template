@@ -6,7 +6,7 @@ import { useLanguage } from './useLanguage';
 // "Hello {name}": {name} is filled with t("greeting", { name: "Ana" })
 const PLACEHOLDER = /\{(\w+)\}/g;
 
-// Translations files already checked, each one only the first time it's used
+// Translation files already checked, each one only the first time it's used
 const checked = new WeakSet();
 
 function placeholdersOf(text) {

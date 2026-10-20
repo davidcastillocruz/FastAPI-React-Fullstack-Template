@@ -131,7 +131,7 @@ export default function HomePage() {
     loadPage(1);
     // Leaving the page cancels the request (and StrictMode's first mount in development)
     return () => listRequest.current?.abort();
-    // Only on mount: loadPage is a new function on every render
+    // Only on mount (loadPage is a new function on every render). The rule also flags the loading state set here, on purpose
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
