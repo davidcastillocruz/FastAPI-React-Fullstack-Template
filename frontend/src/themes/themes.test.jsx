@@ -1,10 +1,10 @@
 import { act, render, screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { setSystemDark } from '@/test/matchMedia';
 import { getCookie, setCookie } from '@/utils/cookies';
 
-import { applyTheme, getInitialTheme, getSavedTheme } from './theme';
+import { applyTheme, getInitialTheme, getSavedTheme } from './themes';
 import ThemeProvider from './ThemeProvider';
 import { useTheme } from './useTheme';
 
@@ -28,6 +28,9 @@ function renderTheme() {
 }
 
 const html = document.documentElement;
+
+// A failed expect never reaches the end of its test: the spies are restored here
+afterEach(() => vi.restoreAllMocks());
 
 describe('theme detection', () => {
   test('without a cookie it follows the system', () => {
@@ -77,7 +80,6 @@ describe('ThemeProvider', () => {
     expect(html.dataset.theme).toBe('light');
     expect(getCookie('theme')).toBeNull();
     expect(error).toHaveBeenCalledOnce();
-    error.mockRestore();
   });
 
   test('follows the system live while the user has not picked a theme', () => {
@@ -89,6 +91,8 @@ describe('ThemeProvider', () => {
   test('a picked theme wins over a change of the system', () => {
     renderTheme();
     act(() => screen.getByRole('button', { name: 'dark' }).click());
+    // A real change, to dark and back to light
+    act(() => setSystemDark(true));
     act(() => setSystemDark(false));
     expect(html.dataset.theme).toBe('dark');
   });
@@ -96,6 +100,5 @@ describe('ThemeProvider', () => {
   test('useTheme outside the provider fails with a clear error', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(() => render(<ThemeButtons />)).toThrow('useTheme must be used inside ThemeProvider');
-    vi.restoreAllMocks();
   });
 });

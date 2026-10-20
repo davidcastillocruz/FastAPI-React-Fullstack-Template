@@ -6,7 +6,7 @@ import LanguageProvider from '@/languages/LanguageProvider';
 import HomePage from '@/pages/HomePage/HomePage';
 import NotFoundPage from '@/pages/NotFoundPage/NotFoundPage';
 import ThemeProvider from '@/themes/ThemeProvider';
-import { applyTheme, getInitialTheme } from '@/themes/theme';
+import { applyTheme, getInitialTheme } from '@/themes/themes';
 import '@/themes/themes.css';
 import '@/index.css';
 

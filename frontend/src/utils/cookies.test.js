@@ -11,6 +11,12 @@ describe('cookies', () => {
     expect(getCookie('theme')).toBeNull();
   });
 
+  test('the cookie lasts the max age it was given', () => {
+    // A max age of 0 expires it at once, without max-age it would stay until the browser closes
+    setCookie('theme', 'dark', 0);
+    expect(getCookie('theme')).toBeNull();
+  });
+
   test('a cookie that does not exist is null', () => {
     expect(getCookie('nope')).toBeNull();
   });

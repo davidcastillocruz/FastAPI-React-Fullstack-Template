@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 
 import { ThemeContext } from './ThemeContext';
-import { THEME_COOKIE, THEMES, applyTheme, getSavedTheme, getSystemTheme, systemDarkQuery } from './theme';
+import { THEME_COOKIE, THEMES, applyTheme, getSavedTheme, getSystemTheme, systemDarkQuery } from './themes';
 import { setCookie } from '@/utils/cookies';
 
 // The theme of the user if they picked one, the one of the system otherwise
