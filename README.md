@@ -11,6 +11,9 @@
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+<img src="docs/demo.gif" alt="The example page: an email is dispatched, travels through the stack and lands on the departures board, then the page switches to the dark theme and to Spanish" width="800">
 
 [Features](#features) · [Quick start](#quick-start) · [Project structure](#project-structure) · [Backend guide](#backend-guide) · [Frontend guide](#frontend-guide) · [Testing](#testing)
 
@@ -119,6 +122,7 @@ Saving a Python file in `backend/src` reloads the API, and saving a file in `fro
 │       ├── hooks/               # shared hooks
 │       ├── features/            # big features with their own pages, components and hooks
 │       └── test/                # setup of the frontend tests
+├── docs/                    # the GIF of this README
 ├── .github/workflows/ci.yml
 └── docker-compose.yml
 ```
@@ -283,6 +287,10 @@ On every push and pull request, GitHub Actions runs two jobs in parallel:
 | Add a frontend dependency | `docker compose exec frontend npm install <package>` |
 | Reinstall the frontend dependencies of the container (after a pull that changes `package.json`) | `docker compose up --build -V` |
 | Lint the frontend | `docker compose exec frontend npm run lint` |
+
+## License
+
+[MIT](LICENSE): use it, change it and ship it, keeping the copyright notice.
 
 ---
 
