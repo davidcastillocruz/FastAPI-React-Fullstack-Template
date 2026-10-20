@@ -261,6 +261,8 @@ docker compose exec frontend npm test  # frontend
 
 The backend tests create and use an `app_test` database in the same PostgreSQL, so your development data is never touched. `docker compose exec frontend npx vitest` keeps the frontend tests running while you code.
 
+The backend tests always run with `en` as the main language and `en`, `es` available (forced in `tests/conftest.py`), whatever your `.env.api` says. The frontend's language tests follow `MAIN_LANGUAGE` and `LANGUAGES` of `src/languages/languages.js`.
+
 ### Continuous integration
 
 On every push and pull request, GitHub Actions runs two jobs in parallel:
