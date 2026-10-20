@@ -9,10 +9,10 @@
     },
     "EMAIL_ALREADY_REQUESTED": {
         "en": {
-            "detail": "This email has already received a test email"
+            "detail": "This email has already asked for a test email"
         },
         "es": {
-            "detail": "Este email ya ha recibido un email de prueba"
+            "detail": "Este email ya ha pedido un email de prueba"
         }
     }
 }

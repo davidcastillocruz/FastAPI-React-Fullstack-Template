@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.email import send_email
 from src.core.languages import get_error_detail, get_response
-from src.emails.test_email import build_test_email
+from src.emails.demo_email import build_demo_email
 from src.modules.email_requests.repositories import email_request_repository as repository
 from src.modules.email_requests.schemas.email_request_schemas import EmailRequestResponse
 from src.shared.schemas import MessageResponse
@@ -34,6 +34,10 @@ async def create_email_request(
     if await repository.get_email_request_by_email(db, email):
         raise _already_requested(language)
 
+    # Built before saving: if a text is missing the request fails without leaving a saved email behind
+    subject, body = build_demo_email(language)
+    message = get_response("EMAIL_REQUEST_CREATED", language)["message"]
+
     try:
         email_request = await repository.create_email_request(db, email)
     except IntegrityError:
@@ -42,10 +46,9 @@ async def create_email_request(
 
     logger.info("Email request saved", extra={"email_request_id": email_request.id})
 
-    subject, body = build_test_email(language)
     background_tasks.add_task(send_email, subject, [email], body)
 
-    return MessageResponse(message=get_response("EMAIL_REQUEST_CREATED", language)["message"])
+    return MessageResponse(message=message)
 
 
 # One page of email requests, page 1 is the first one

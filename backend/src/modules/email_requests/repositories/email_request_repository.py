@@ -17,7 +17,8 @@ async def create_email_request(db: AsyncSession, email: str) -> EmailRequestMode
     return email_request
 
 
-# Newest first, id breaks ties so the pages never repeat or skip a row
+# Newest first, id breaks ties so the same rows always give the same pages
+# (a row saved between two page loads moves the next page one row)
 async def get_email_requests(db: AsyncSession, offset: int, limit: int) -> list[EmailRequestModel]:
     result = await db.scalars(
         select(EmailRequestModel)

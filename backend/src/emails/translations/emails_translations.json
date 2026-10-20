@@ -1,5 +1,5 @@
 {
-    "TEST_EMAIL": {
+    "DEMO_EMAIL": {
         "en": {
             "subject": "Your test email",
             "title": "It works!",

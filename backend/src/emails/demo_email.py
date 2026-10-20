@@ -55,9 +55,9 @@ def _route() -> str:
 
 
 # Test email of the demo: subject and HTML body in the user's language, styled like the home page
-def build_test_email(language: str) -> tuple[str, str]:
-    raw = get_response("TEST_EMAIL", language)
-    # Escaped for the HTML, the subject goes as it is: it's a header, not HTML
+def build_demo_email(language: str) -> tuple[str, str]:
+    raw = get_response("DEMO_EMAIL", language)
+    # Escaped for the HTML. The subject goes as it is (it's a header, not HTML) and the status raw: _flaps escapes each flap
     texts = {key: escape(text) for key, text in raw.items()}
     body = f"""<!doctype html>
 <html lang="{language}">
@@ -80,7 +80,7 @@ FastAPI <span style="font-weight:400;color:{MUTED};">&amp;</span> React
 <div style="padding:0 0 10px 3px;font:700 11px/1 {FONT};letter-spacing:1.5px;text-transform:uppercase;color:{SIGNAL};">
 {texts["board"]}
 </div>
-{_flaps(texts["status"])}
+{_flaps(raw["status"])}
 </td></tr>
 <tr><td style="padding:32px 0;">{_route()}</td></tr>
 <tr><td style="padding-top:18px;border-top:1px solid {BORDER};font:400 13px/1.5 {FONT};color:{MUTED};">{texts["footer"]}</td></tr>

@@ -1,4 +1,10 @@
+import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+
 from src.core.limiter import limiter
+from src.database import engine
+from src.modules.email_requests.repositories import email_request_repository
 from src.modules.email_requests.services.email_request_service import PAGE_SIZE
 
 
@@ -15,6 +21,7 @@ async def test_create_saves_and_sends_the_email(client, sent_emails):
     # Saved and sent in lowercase
     assert sent_emails[0][1] == ["ana@test.dev"]
     assert sent_emails[0][0] == "Your test email"
+    assert [row["email"] for row in (await client.get("/email-requests")).json()] == ["ana@test.dev"]
 
 
 async def test_create_in_spanish(client, sent_emails):
@@ -25,11 +32,12 @@ async def test_create_in_spanish(client, sent_emails):
 
 
 async def test_create_twice_is_a_conflict(client, sent_emails):
-    await create(client, "ana@test.dev")
+    # The first one in uppercase too: both are saved and looked up in lowercase
+    await create(client, "Ana@test.dev")
     response = await create(client, "ANA@test.dev")
 
     assert response.status_code == 409
-    assert response.json() == {"detail": "This email has already received a test email"}
+    assert response.json() == {"detail": "This email has already asked for a test email"}
     # Only the first one sends an email
     assert len(sent_emails) == 1
 
@@ -50,9 +58,36 @@ async def test_create_without_body(client):
 
 
 async def test_create_is_rate_limited(client):
-    statuses = [(await create(client, f"user{i}@test.dev")).status_code for i in range(6)]
+    responses = [await create(client, f"user{i}@test.dev", params={"lang": "es"}) for i in range(6)]
 
-    assert statuses == [201] * 5 + [429]
+    assert [response.status_code for response in responses] == [201] * 5 + [429]
+    assert responses[-1].json() == {"detail": "Demasiadas peticiones, espera un momento y vuelve a intentarlo"}
+
+
+async def test_create_at_the_same_time_is_a_conflict(client, monkeypatch, sent_emails):
+    # Two requests that both pass the check before either saves: the unique constraint stops the second one
+    async def not_found_yet(db, email):
+        return None
+
+    monkeypatch.setattr(email_request_repository, "get_email_request_by_email", not_found_yet)
+    await create(client, "ana@test.dev")
+    response = await create(client, "ana@test.dev")
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "This email has already asked for a test email"}
+    assert len(sent_emails) == 1
+
+
+async def test_database_errors_hide_the_parameters(client):
+    insert = text("INSERT INTO email_requests (email) VALUES (:email)")
+    async with engine.begin() as connection:
+        await connection.execute(insert, {"email": "ana@test.dev"})
+
+    with pytest.raises(IntegrityError) as error:
+        async with engine.begin() as connection:
+            await connection.execute(insert, {"email": "ana@test.dev"})
+
+    assert "ana@test.dev" not in str(error.value)
 
 
 async def test_list_is_empty(client):
@@ -77,6 +112,19 @@ async def test_list_pages_newest_first(client):
     emails = [row["email"] for row in page_1 + page_2]
     assert emails == [f"user{i:02}@test.dev" for i in reversed(range(12))]
     assert set(page_1[0]) == {"id", "email", "created_at"}
+
+
+async def test_list_breaks_ties_by_id(client):
+    # Same created_at for every row: the newest id goes first, so the pages never repeat or skip a row
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("INSERT INTO email_requests (email, created_at) VALUES (:email, '2026-01-01T00:00:00Z')"),
+            [{"email": f"same{i}@test.dev"} for i in range(3)],
+        )
+
+    rows = (await client.get("/email-requests")).json()
+
+    assert [row["id"] for row in rows] == [3, 2, 1]
 
 
 async def test_list_with_an_invalid_page(client):
