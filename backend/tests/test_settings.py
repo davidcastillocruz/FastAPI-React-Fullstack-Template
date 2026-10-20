@@ -48,7 +48,10 @@ def test_lists_and_text_are_normalized(make):
 def test_database_url_escapes_the_password(make):
     settings = make(POSTGRES_PASSWORD="p@ss/word:1")
 
-    assert settings.DATABASE_URL == "postgresql+asyncpg://user:p%40ss%2Fword%3A1@db:5432/app"
+    url = settings.DATABASE_URL.render_as_string(hide_password=False)
+
+    assert url == "postgresql+asyncpg://user:p%40ss%2Fword%3A1@db:5432/app"
+    assert settings.DATABASE_URL.password == "p@ss/word:1"
 
 
 @pytest.mark.parametrize("changes", [
@@ -60,9 +63,15 @@ def test_database_url_escapes_the_password(make):
     {"MAIN_LANGUAGE": "fr"},
     {"MAIL_START_TLS": "true", "MAIL_SSL_TLS": "true"},
     {"APP_MODE": "production"},
+    {"CORS_ORIGINS": "*"},
+    {"CORS_ORIGINS": "http://localhost:5173,null"},
+    {"CORS_ORIGINS": " , "},
+    {"CORS_ORIGINS": "localhost:5173"},
+    {"CORS_ORIGINS": "http://localhost:5173/app"},
 ], ids=[
     "missing variable", "unknown mode", "port not a number", "pool too small", "negative overflow",
-    "main language not available", "both tls", "production without tls",
+    "main language not available", "both tls", "production without tls", "any origin", "null origin",
+    "no origin", "origin without scheme", "origin with a path",
 ])
 def test_invalid_settings_stop_startup(make, changes):
     with pytest.raises(ValidationError):

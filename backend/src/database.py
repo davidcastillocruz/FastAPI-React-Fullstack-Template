@@ -14,13 +14,17 @@ engine = create_async_engine(
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
     pool_pre_ping=True,  # check connections before using them
+    # Database errors don't include the query parameters (they would put emails in the logs).
+    # The DETAIL line of a PostgreSQL error can still show a value ("Key (email)=(...) already exists"),
+    # so a constraint error has to be caught (like the repeated email in the service), not logged with its traceback
+    hide_parameters=True,
 )
 
 # Session factory, expire_on_commit=False keeps the objects readable after a commit
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
-# Base class of the models: class User(Base) registers its table
+# Base class of the models: class UserModel(Base) registers its table
 # The naming convention gives every index and constraint a predictable name (uq_users_email...),
 # so Alembic can find them later to change or drop them
 class Base(DeclarativeBase):

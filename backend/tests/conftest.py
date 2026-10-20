@@ -1,8 +1,13 @@
 import os
 
-# Before importing the app: the tests use their own database and keep the rate limit counters in memory
+# Before importing the app: the tests use their own database, keep the rate limit counters in memory
+# and don't depend on how each developer customized .env.api (the assertions expect these values)
 os.environ["POSTGRES_DB"] = "app_test"
 os.environ["RATE_LIMIT_STORAGE_URI"] = "memory://"
+os.environ["APP_MODE"] = "development"
+os.environ["MAIN_LANGUAGE"] = "en"
+os.environ["AVAILABLE_LANGUAGES"] = "en,es"
+os.environ["CORS_ORIGINS"] = "http://localhost:5173"
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -17,10 +22,17 @@ from src.main import app
 from src.modules.email_requests.services import email_request_service
 
 
-# Creates the test database once, with the tables of the models (alembic is not needed here)
+# The lifespan doesn't run with the test client, the languages are loaded here once
 @pytest.fixture(scope="session", autouse=True)
+def languages():
+    setup_language_system()
+
+
+# Creates the test database once, with the tables of the models (CI checks that the migrations match them).
+# Only the tests that call the API need it (through client), the unit tests run without PostgreSQL
+@pytest.fixture(scope="session")
 async def database():
-    admin_url = settings.DATABASE_URL.rsplit("/", 1)[0] + "/postgres"
+    admin_url = settings.DATABASE_URL.set(database="postgres")
     admin = create_async_engine(admin_url, isolation_level="AUTOCOMMIT")
     async with admin.connect() as connection:
         exists = await connection.scalar(
@@ -33,16 +45,13 @@ async def database():
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.drop_all)
         await connection.run_sync(Base.metadata.create_all)
-
-    # The lifespan doesn't run with the test client, the languages are loaded here
-    setup_language_system()
     yield
     await engine.dispose()
 
 
-# Every test starts with empty tables and fresh rate limit counters
-@pytest.fixture(autouse=True)
-async def clean_state():
+# Every API test starts with empty tables and fresh rate limit counters
+@pytest.fixture
+async def clean_state(database):
     tables = ", ".join(f'"{table.name}"' for table in Base.metadata.sorted_tables)
     async with engine.begin() as connection:
         await connection.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
@@ -63,6 +72,6 @@ def sent_emails(monkeypatch) -> list[tuple]:
 
 # Calls the app directly, without a server
 @pytest.fixture
-async def client():
+async def client(clean_state):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         yield client

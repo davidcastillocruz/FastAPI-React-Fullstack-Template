@@ -1,5 +1,6 @@
 import logging
 
+from aiosmtplib import SMTPRecipientsRefused
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
 from fastapi_mail.errors import ConnectionErrors
 
@@ -46,8 +47,21 @@ async def send_email(subject: str, recipients: list[str], body: str) -> None:
         )
         return
 
-    except Exception:
-        logger.exception("Failed to send email", extra={"recipients": masked, "subject": subject})
+    except SMTPRecipientsRefused as exc:
+        # The server rejected the recipients (550 user unknown...): the SMTP codes, the addresses masked
+        logger.error(
+            "Mail server refused the recipients",
+            extra={"recipients": masked, "codes": [refused.code for refused in exc.recipients], "subject": subject}
+        )
+        return
+
+    except Exception as exc:
+        # No traceback: the messages of the SMTP errors carry the plain recipient
+        logger.error(
+            "Failed to send email: %s",
+            type(exc).__name__,
+            extra={"recipients": masked, "subject": subject}
+        )
         return
 
     logger.info("Email sent", extra={"recipients": masked, "subject": subject})

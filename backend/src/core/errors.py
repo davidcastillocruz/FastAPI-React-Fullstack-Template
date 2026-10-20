@@ -6,6 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.routing import Match
 
 from src.core.languages import get_error_detail
 from src.api.dependencies import get_language
@@ -19,6 +20,9 @@ ROUTING_ERRORS = {
     404: "NOT_FOUND",  # the route doesn't exist
     405: "METHOD_NOT_ALLOWED",  # the route exists but not with that method
 }
+
+# The methods a route can have, in the order they're listed in the "Allow" header of a 405
+HTTP_METHODS = ("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
 
 
 # Translated {"detail": ...} error response
@@ -56,10 +60,20 @@ async def http_error_handler(request: Request, exc: StarletteHTTPException) -> J
     # Only Starlette's own text ("Not Found"...), a custom 404 of ours keeps its message
     if name and exc.detail == HTTPStatus(exc.status_code).phrase:
         response = error_response(request, name, exc.status_code)
-        # The 405 must keep the "Allow" header with the valid methods
         response.headers.update(exc.headers or {})
+        if exc.status_code == 405:
+            response.headers["Allow"] = allowed_methods(request)
         return response
     return await http_exception_handler(request, exc)
+
+
+# Every method of the path. Starlette's "Allow" only has the ones of the first route declared with it:
+# a POST and a GET in two functions on the same path would answer "Allow: POST"
+def allowed_methods(request: Request) -> str:
+    return ", ".join(
+        method for method in HTTP_METHODS
+        if any(route.matches({**request.scope, "method": method})[0] == Match.FULL for route in request.app.routes)
+    )
 
 
 # It registers the error handlers in the app

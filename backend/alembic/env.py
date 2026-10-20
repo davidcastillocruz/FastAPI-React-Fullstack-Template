@@ -45,7 +45,7 @@ def do_run_migrations(connection: Connection) -> None:
 # Same async driver as the app (asyncpg); the migrations run inside run_sync
 # NullPool: one connection for the command, closed at the end
 async def run_migrations_online() -> None:
-    engine = create_async_engine(settings.DATABASE_URL, poolclass=pool.NullPool)
+    engine = create_async_engine(settings.DATABASE_URL, poolclass=pool.NullPool, hide_parameters=True)
 
     async with engine.connect() as connection:
         await connection.run_sync(do_run_migrations)

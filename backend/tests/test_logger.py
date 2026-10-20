@@ -88,6 +88,21 @@ def test_traceback_goes_below_the_line():
     assert first.endswith("| boom") and "Traceback" in rest and "ValueError: bad" in rest
 
 
+def test_traceback_lines_are_escaped():
+    try:
+        raise ValueError("bad\r\nFAKE \x1b[2J \u2028 \u202e \u200f")
+    except ValueError:
+        log = record("boom", level=logging.ERROR, exc_info=sys.exc_info())
+
+    text = line(log)
+
+    assert not any(char in text for char in "\r\x1b\u2028\u202e\u200f")
+    assert "ValueError: bad\\r" in text and "FAKE \\x1b[2J \\u2028 \\u202e \\u200f" in text
+    # The traceback keeps its lines, all indented: only the log line starts at the first column
+    lines = text.split("\n")
+    assert len(lines) > 3 and all(text.startswith("    ") for text in lines[1:])
+
+
 def test_colors():
     plain = line(record())
     colored = line(record(), colors=True)
@@ -114,9 +129,29 @@ def test_setup_logging(capsys, monkeypatch, restore_logging):
     logging.getLogger("uvicorn.access").info("GET / 200")
     logging.getLogger("sqlalchemy.engine").info("SELECT 1")
     early.warning("still here")
+    token = request_context.request_id.set("abc123")
+    logging.getLogger("src.test").info("inside a request")
+    request_context.request_id.reset(token)
     err = capsys.readouterr().err
 
     assert "debug line | email_request_id=7" in err
     assert "uvicorn | Started server process" in err
     assert "still here" in err
-    assert "GET / 200" not in err and "SELECT 1" not in err and "\x1b" not in err
+    # The handler adds the request context to every line
+    assert "| abc123 - | src.test | inside a request" in err
+    assert "GET / 200" not in err and "SELECT 1" not in err
+
+
+@pytest.mark.parametrize("no_color, colored", [(False, True), (True, False)])
+def test_colors_only_in_a_terminal_without_no_color(capsys, monkeypatch, restore_logging, no_color, colored):
+    # A real terminal: the colors only depend on NO_COLOR
+    monkeypatch.setattr(sys.stderr, "isatty", lambda: True)
+    if no_color:
+        monkeypatch.setenv("NO_COLOR", "1")
+    else:
+        monkeypatch.delenv("NO_COLOR", raising=False)
+    setup_logging()
+
+    logging.getLogger("src.test").warning("hello")
+
+    assert ("\x1b[" in capsys.readouterr().err) is colored

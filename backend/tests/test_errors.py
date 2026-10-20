@@ -1,6 +1,9 @@
+import logging
+
 import pytest
 from fastapi import HTTPException
 
+from src.core.logger import RequestContextFilter
 from src.main import app
 
 
@@ -11,13 +14,13 @@ async def test_unknown_route_is_translated(client):
     assert response.json() == {"detail": "Esta página o recurso no existe"}
 
 
-async def test_wrong_method_keeps_the_allow_header(client):
+async def test_wrong_method_lists_every_allowed_method(client):
     response = await client.delete("/email-requests")
 
     assert response.status_code == 405
     assert response.json() == {"detail": "This action isn't allowed here"}
-    # Starlette lists the methods of the first route with that path
-    assert response.headers["allow"]
+    # GET and POST are two functions on the same path, both are listed
+    assert response.headers["allow"] == "GET, POST"
 
 
 async def test_malformed_json(client):
@@ -56,6 +59,31 @@ async def test_500_has_cors_headers(client, error_routes):
 
     assert response.status_code == 500
     assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
+async def test_every_request_is_logged_with_its_level(client, error_routes, caplog):
+    with caplog.at_level(logging.INFO, logger="src.main"):
+        await client.get("/email-requests")
+        await client.get("/nope")
+        await client.get("/test-boom")
+
+    records = {record.getMessage(): record for record in caplog.records if record.name == "src.main"}
+    assert records["GET /email-requests 200"].levelno == logging.INFO
+    assert records["GET /nope 404"].levelno == logging.WARNING
+    # The 500 goes with its traceback
+    assert records["GET /test-boom 500"].levelno == logging.ERROR
+    assert records["GET /test-boom 500"].exc_info is not None
+
+
+async def test_request_logs_carry_its_id_and_ip(client, caplog):
+    # The filter of the app's handler, caplog has its own handler
+    caplog.handler.addFilter(RequestContextFilter())
+    with caplog.at_level(logging.INFO, logger="src.main"):
+        response = await client.get("/email-requests")
+
+    record = next(record for record in caplog.records if record.getMessage() == "GET /email-requests 200")
+    assert record.request_id == response.headers["X-Request-ID"]
+    assert record.client_ip == "127.0.0.1"
 
 
 async def test_own_http_exception_keeps_its_text(client, error_routes):

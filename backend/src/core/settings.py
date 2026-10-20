@@ -1,13 +1,16 @@
+import re
 from pathlib import Path
 from typing import Annotated, ClassVar, Literal, Self
-from urllib.parse import quote
-
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from sqlalchemy import URL
 
 # backend/ folder: backend/src/core/settings.py -> parents[2]
 BASE_DIR = Path(__file__).resolve().parents[2]
 SRC_DIR = BASE_DIR / "src"
+
+# An origin as the browser sends it: http://localhost:5173, https://app.com, http://[::1]:5173
+ORIGIN_PATTERN = re.compile(r"https?://(\[[0-9a-f:.]+\]|[^/\s:\[\]]+)(:\d+)?")
 
 
 # Every field is read from the environment variable with its name, converted to its type and validated:
@@ -83,7 +86,17 @@ class Settings(BaseSettings):
     @classmethod
     def split_origins(cls, value: str | list[str]) -> list[str]:
         origins = value.split(",") if isinstance(value, str) else value
-        return [origin.strip().rstrip("/").lower() for origin in origins if origin.strip()]
+        origins = [origin.strip().rstrip("/").lower() for origin in origins if origin.strip()]
+        # With credentials allowed, "*" would let any site call the API with the user's cookies
+        if "*" in origins or "null" in origins:
+            raise ValueError('CORS_ORIGINS must list real origins, "*" and "null" are not allowed')
+        # Empty, "localhost:5173" or "http://app.com/path" would start the app with every browser call blocked
+        if not origins:
+            raise ValueError("CORS_ORIGINS needs at least one origin")
+        for origin in origins:
+            if not ORIGIN_PATTERN.fullmatch(origin):
+                raise ValueError(f"CORS_ORIGINS has '{origin}', an origin is written scheme://host[:port]")
+        return origins
 
     # Checks that need several fields, after each one is valid
     @model_validator(mode="after")
@@ -98,12 +111,16 @@ class Settings(BaseSettings):
             raise ValueError("In production, MAIL_START_TLS or MAIL_SSL_TLS must be true")
         return self
 
-    # quote: a password with characters like "/" or "@" doesn't break the URL
+    # URL.create escapes every part: a password with characters like "/" or "@" doesn't break the URL
     @property
-    def DATABASE_URL(self) -> str:
-        return (
-            f"postgresql+asyncpg://{quote(self.POSTGRES_USER, safe='')}:{quote(self.POSTGRES_PASSWORD, safe='')}"
-            f"@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.POSTGRES_DB}"
+    def DATABASE_URL(self) -> URL:
+        return URL.create(
+            "postgresql+asyncpg",
+            username=self.POSTGRES_USER,
+            password=self.POSTGRES_PASSWORD,
+            host=self.DATABASE_HOST,
+            port=self.DATABASE_PORT,
+            database=self.POSTGRES_DB,
         )
 
     @property

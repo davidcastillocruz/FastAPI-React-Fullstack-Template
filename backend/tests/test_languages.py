@@ -28,6 +28,12 @@ def test_language_quality_and_fallbacks():
     assert get_language(request_with({"Accept-Language": "fr;q=1, en;q=0.5, es;q=0.9"})) == "es"
     assert get_language(request_with({"Accept-Language": "es;q=0, en"})) == "en"
     assert get_language(request_with({"Accept-Language": "*, fr, es;q=bad"})) == "en"
+
+
+def test_language_header_with_spaces_and_wrong_qualities():
+    assert get_language(request_with({"Accept-Language": "en; q=0.5, es ; q=0.9"})) == "es"
+    assert get_language(request_with({"Accept-Language": "es;q=inf, en"})) == "en"
+    assert get_language(request_with({"Accept-Language": "es;q=nan, es;q=2"})) == "en"
     assert get_language(request_with(), "fr") == "en"
     assert get_language(request_with()) == "en"
 
@@ -69,33 +75,46 @@ def test_extra_language_is_ignored(translations):
     assert set(languages.LANGUAGE_DATA["HELLO"]) == {"en", "es"}
 
 
-@pytest.mark.parametrize("data, raw", [
-    (None, "{bad json"),
-    (None, '{"A": {}, "A": {}}'),
-    ([], None),
-    ({"A": "text"}, None),
-    ({"A": {"en": {"detail": "x"}}}, None),
-    ({"A": entry({"detail": "x"}, "text")}, None),
-    ({"A": entry({"detail": 1}, {"detail": "x"})}, None),
-    ({"A": entry({"detail": "x"}, {"other": "x"})}, None),
-    ({"A": entry({"detail": "%s"}, {"detail": "x"})}, None),
-    ({"A": entry({"detail": "50% %s"}, {"detail": "50% %s"})}, None),
+VALID_ENTRY = json.dumps(entry({"detail": "x"}, {"detail": "x"}))
+
+
+# Each file is broken in only one way, and match= checks that it's that check the one that stops it
+@pytest.mark.parametrize("data, raw, error, match", [
+    (None, "{bad json", json.JSONDecodeError, "Expecting"),
+    (None, f'{{"A": {VALID_ENTRY}, "A": {VALID_ENTRY}}}', ValueError, r"Repeated keys: \['A'\]"),
+    ([], None, TypeError, r"Expected a dict in .+, got list"),
+    ({"A": "text"}, None, TypeError, r"\[A\], got str"),
+    ({"A": {"en": {"detail": "x"}}}, None, ValueError, "missing languages"),
+    ({"A": entry({"detail": "x"}, "text")}, None, TypeError, r"\[A\]\[es\], got str"),
+    ({"A": entry({"detail": 1}, {"detail": "x"})}, None, TypeError, "Expected a string"),
+    ({"A": entry({"detail": "x"}, {"other": "x"})}, None, ValueError, "different texts"),
+    ({"A": {"EN": {"detail": "x"}, **entry({"detail": "x"}, {"detail": "x"})}}, None, ValueError, "not in lowercase"),
+    ({"A": entry({"detail": "%s"}, {"detail": "x"})}, None, ValueError, "different number of %s"),
+    ({"A": entry({"detail": "50% %s"}, {"detail": "50% %s"})}, None, ValueError, "can't be filled"),
 ], ids=[
     "invalid json", "repeated key", "not an object", "entry not an object", "missing language",
-    "texts not an object", "text not a string", "different texts", "different placeholders", "unfillable",
+    "texts not an object", "text not a string", "different texts", "uppercase language code", "different placeholders", "unfillable",
 ])
-def test_broken_file_stops_startup(translations, data, raw):
+def test_broken_file_stops_startup(translations, data, raw, error, match):
     translations(data, raw=raw)
 
-    with pytest.raises((ValueError, TypeError)):
+    with pytest.raises(error, match=match):
         setup_language_system()
+
+
+def test_file_with_a_bom_loads(translations):
+    # Some editors save the files with a BOM at the start
+    translations(None, raw="\ufeff" + json.dumps({"HELLO": entry({"detail": "Hi"}, {"detail": "Hola"})}))
+    setup_language_system()
+
+    assert get_error_detail("HELLO", "es") == "Hola"
 
 
 def test_same_name_in_two_files_stops_startup(translations):
     translations({"A": entry({"detail": "x"}, {"detail": "x"})}, name="one_translations.json")
     translations({"A": entry({"detail": "y"}, {"detail": "y"})}, name="two_translations.json")
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="is in src/translations/one_translations.json and"):
         setup_language_system()
 
 
@@ -121,3 +140,12 @@ def test_unknown_response_and_wrong_args_fail(translations):
         get_response("NOPE", "en")
     with pytest.raises(TypeError):
         get_response("A", "en", {"detail": ("extra",)})
+
+
+# The test client doesn't run the lifespan (conftest loads the languages itself): this checks the app's own startup
+async def test_startup_loads_the_languages(monkeypatch):
+    from src.main import app
+
+    monkeypatch.setattr(languages, "LANGUAGE_DATA", {})
+    async with app.router.lifespan_context(app):
+        assert "NOT_FOUND" in languages.LANGUAGE_DATA

@@ -27,13 +27,19 @@ def get_language(request: Request, lang: str | None = None) -> str:
 
     # 3. Accept-Language: "es-ES,es;q=0.9,en;q=0.8" -> ["es-es", "es", "en"]
     candidates = []
+    # Spaces around ";" are valid ("es; q=0.9"). A quality of 0 means "not acceptable",
+    # so q=0, a quality above 1 or one that isn't a number discards the tag
     for part in request.headers.get("accept-language", "").split(","):
-        tag, _, q = part.strip().lower().partition(";q=")
-        try:
-            quality = float(q) if q else 1.0
-        except ValueError:
-            continue
-        if tag and tag != "*" and quality > 0:
+        tag, *params = (piece.strip() for piece in part.split(";"))
+        quality = 1.0
+        for param in params:
+            if param.lower().startswith("q="):
+                try:
+                    quality = float(param[2:])
+                except ValueError:
+                    quality = -1.0
+        tag = tag.lower()
+        if tag and tag != "*" and 0 < quality <= 1:
             candidates.append((quality, tag))
 
     # Highest quality first, ties keep the browser's order (sorted is stable)

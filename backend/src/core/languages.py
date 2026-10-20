@@ -95,6 +95,15 @@ def setup_language_system() -> None:
                 )
                 raise TypeError(f"Expected a dict in {path} [{name}], got {type(languages).__name__}")
 
+            # AVAILABLE_LANGUAGES is read in lowercase: a "pt-BR" key would never match "pt-br"
+            uppercase = sorted(language for language in languages if language != language.lower())
+            if uppercase:
+                logger.critical(
+                    "Language codes must be lowercase",
+                    extra={"path": path, "entry": name, "languages": uppercase}
+                )
+                raise ValueError(f"Response '{name}' in {path} has language codes not in lowercase: {uppercase}")
+
             # Missing languages: the response can't be served -> stop startup
             missing = available - set(languages)
             if missing:
@@ -176,7 +185,7 @@ def setup_language_system() -> None:
 
 
 # Texts of a response in the given language
-# args fills the %s of each text: {"detail": ("ana@test.dev",)}. Texts without args are returned as they are,
+# args fills the %s of each text: {"detail": ("email",)}. Texts without args are returned as they are,
 # so a literal % only needs to be written %% in texts that take args
 def get_response(name: str, language: str, args: dict[str, tuple] | None = None) -> dict[str, str]:
     args = args or {}
@@ -190,8 +199,11 @@ def get_response(name: str, language: str, args: dict[str, tuple] | None = None)
         raise
 
     except (TypeError, ValueError):
-        # Wrong number/type of placeholder args
-        logger.error("Invalid arguments for response", extra={"entry": name, "language": language, "format_args": args})
+        # Wrong number/type of placeholder args. Only how many were given: the values may be personal data
+        logger.error(
+            "Invalid arguments for response",
+            extra={"entry": name, "language": language, "args_given": {key: len(values) for key, values in args.items()}}
+        )
         raise
 
 

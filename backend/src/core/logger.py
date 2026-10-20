@@ -43,9 +43,16 @@ class AppFormatter(logging.Formatter):
         self.use_colors = use_colors
 
     # Control characters written as text: a line break inside a message or an extra (e.g. a path with %0A)
-    # would fake a new log line, and an ANSI code (\x1b[...) would change the colors of the terminal
+    # would fake a new log line, an ANSI code (\x1b[...) would change the colors of the terminal,
+    # and the Unicode line separators and direction marks would break or reorder the line in some viewers
     _CONTROL_CHARS = {
-        **{code: f"\\x{code:02x}" for code in [*range(0x20), *range(0x7f, 0xa0)]},
+        **{
+            code: f"\\u{code:04x}" if code > 0xff else f"\\x{code:02x}"
+            for code in [
+                *range(0x20), *range(0x7f, 0xa0), 0x061c, 0x200e, 0x200f, 0x2028, 0x2029,
+                *range(0x202a, 0x202f), *range(0x2066, 0x206a),
+            ]
+        },
         ord("\n"): "\\n",
         ord("\r"): "\\r",
         ord("\t"): "\\t",
@@ -79,7 +86,7 @@ class AppFormatter(logging.Formatter):
         line = " | ".join([
             self._paint(self.formatTime(record, self.datefmt), self.DIM),
             self._paint(f"{record.levelname:<8}", color),
-            # Escaped too: the client IP may come from a header one day (behind a proxy)
+            # Escaped too: uvicorn takes the client IP from X-Forwarded-For when the request comes from 127.0.0.1
             self._paint(self._escape(f"{getattr(record, 'request_id', '-')} {getattr(record, 'client_ip', '-')}"), self.DIM),
             self._paint(self._location(record), self.CYAN),
             self._escape(record.getMessage()),
@@ -91,8 +98,11 @@ class AppFormatter(logging.Formatter):
                 f"{self._paint(k, self.MAGENTA)}={self._escape(v)}" for k, v in extras.items()
             )
 
+        # The traceback keeps its lines, each one escaped and indented: an exception message can carry user input,
+        # and a line break inside it can't fake a log line, every real log line starts at the first column
         if record.exc_info:
-            line += "\n" + self._paint(self.formatException(record.exc_info), color)
+            traceback = "\n".join(f"    {self._escape(text)}" for text in self.formatException(record.exc_info).split("\n"))
+            line += "\n" + self._paint(traceback, color)
 
         return line
 
