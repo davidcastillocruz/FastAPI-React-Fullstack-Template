@@ -64,6 +64,12 @@ pnpm-debug.log*
 .oxlintcache
 
 # =========================
+# AI assistants (personal settings and permissions)
+# =========================
+.claude/
+CLAUDE.local.md
+
+# =========================
 # Editors and OS
 # =========================
 .vscode/*

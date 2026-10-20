@@ -1,4 +1,5 @@
 # Development: docker compose up --build
+# Every port is published on 127.0.0.1: reachable from your computer only, not from the rest of your network
 services:
   db:
     image: postgres:17
@@ -6,15 +7,18 @@ services:
     env_file: ./backend/.env.db
     # Open on your computer too, to connect with a database client
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
-    # Ready means accepting connections, not just started
+    # Ready means accepting TCP connections like the backend's: on the first start the image runs a temporary
+    # server reachable only through its local socket while it creates the user and the database
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
+      # The first start creates the database: failed checks during this time don't count
+      start_period: 10s
 
   backend:
     build: ./backend
@@ -22,7 +26,7 @@ services:
       - ./backend/.env.api
       - ./backend/.env.db
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     # Your code inside the container: a saved change reloads the API
     volumes:
       - ./backend:/app
@@ -40,11 +44,11 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
     volumes:
       # Your code inside the container: a saved change reloads the page
       - ./frontend:/app
-      # The container keeps its own node_modules: the one of your computer has macOS binaries
+      # The container keeps its own node_modules: the one of your computer may have binaries for another system
       - /app/node_modules
     tty: true
 
@@ -56,7 +60,7 @@ services:
   mailpit:
     image: axllent/mailpit
     ports:
-      - "8025:8025"
+      - "127.0.0.1:8025:8025"
     environment:
       # Accepts the MAIL_USERNAME and MAIL_PASSWORD of .env.api without TLS, it's only for development
       MP_SMTP_AUTH_ACCEPT_ANY: 1

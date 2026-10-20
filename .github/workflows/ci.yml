@@ -5,7 +5,7 @@ on:
   push:
   pull_request:
 
-# The job only reads the code: its token can't change the repository
+# The jobs only read the code: their token can't change the repository
 permissions:
   contents: read
 
@@ -30,7 +30,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres"
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
@@ -52,6 +52,12 @@ jobs:
         run: |
           cp .env.api.example .env.api
           cp .env.db.example .env.db
+
+      # The tests build the tables from the models: a model changed without its migration fails here
+      - name: Check the migrations
+        env:
+          DATABASE_HOST: localhost
+        run: alembic upgrade head && alembic check
 
       - name: Run the tests
         env:
