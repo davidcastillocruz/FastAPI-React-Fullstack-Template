@@ -142,10 +142,10 @@ def test_setup_logging(capsys, monkeypatch, restore_logging):
     assert "GET / 200" not in err and "SELECT 1" not in err
 
 
-@pytest.mark.parametrize("no_color, colored", [(False, True), (True, False)])
-def test_colors_only_in_a_terminal_without_no_color(capsys, monkeypatch, restore_logging, no_color, colored):
-    # A real terminal: the colors only depend on NO_COLOR
-    monkeypatch.setattr(sys.stderr, "isatty", lambda: True)
+# Docker's tty: true gives the backend a terminal, a file or a pipe (CI) gets plain lines
+@pytest.mark.parametrize("terminal, no_color, colored", [(True, False, True), (True, True, False), (False, False, False)])
+def test_colors_only_in_a_terminal_without_no_color(capsys, monkeypatch, restore_logging, terminal, no_color, colored):
+    monkeypatch.setattr(sys.stderr, "isatty", lambda: terminal)
     if no_color:
         monkeypatch.setenv("NO_COLOR", "1")
     else:

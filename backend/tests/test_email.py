@@ -2,7 +2,7 @@ import logging
 import re
 
 from aiosmtplib import SMTPRecipientRefused, SMTPRecipientsRefused
-from fastapi_mail import FastMail
+from fastapi_mail import FastMail, MessageType
 from fastapi_mail.errors import ConnectionErrors
 
 from src.core.email import _mask_email, send_email
@@ -42,14 +42,19 @@ def test_demo_email_escapes_the_texts_once(monkeypatch):
     assert flaps(body) == ["A", "&amp;", "&#x27;"]
 
 
-async def test_send_email_logs_masked_recipients(monkeypatch, caplog):
+async def test_send_email_sends_the_html_and_logs_masked_recipients(monkeypatch, caplog):
+    sent = []
+
     async def accepted(self, message):
-        return None
+        sent.append(message)
 
     monkeypatch.setattr(FastMail, "send_message", accepted)
     with caplog.at_level(logging.INFO, logger="src.core.email"):
         await send_email("Subject", ["ana@test.dev"], "<p>body</p>")
 
+    message = sent[0]
+    assert [recipient.email for recipient in message.recipients] == ["ana@test.dev"]
+    assert message.subject == "Subject" and message.body == "<p>body</p>" and message.subtype == MessageType.html
     assert caplog.records[-1].getMessage() == "Email sent"
     assert caplog.records[-1].recipients == ["a***@test.dev"]
 

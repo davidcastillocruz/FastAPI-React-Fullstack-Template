@@ -63,19 +63,24 @@ def test_database_url_escapes_the_password(make):
     {"MAIN_LANGUAGE": "fr"},
     {"MAIL_START_TLS": "true", "MAIL_SSL_TLS": "true"},
     {"APP_MODE": "production"},
-    {"CORS_ORIGINS": "*"},
-    {"CORS_ORIGINS": "http://localhost:5173,null"},
     {"CORS_ORIGINS": " , "},
     {"CORS_ORIGINS": "localhost:5173"},
     {"CORS_ORIGINS": "http://localhost:5173/app"},
 ], ids=[
     "missing variable", "unknown mode", "port not a number", "pool too small", "negative overflow",
-    "main language not available", "both tls", "production without tls", "any origin", "null origin",
+    "main language not available", "both tls", "production without tls",
     "no origin", "origin without scheme", "origin with a path",
 ])
 def test_invalid_settings_stop_startup(make, changes):
     with pytest.raises(ValidationError):
         make(**changes)
+
+
+# With credentials allowed, "*" would let any site call the API with the user's cookies
+@pytest.mark.parametrize("origins", ["*", "http://localhost:5173,null"])
+def test_any_origin_is_rejected(make, origins):
+    with pytest.raises(ValidationError, match='"\\*" and "null" are not allowed'):
+        make(CORS_ORIGINS=origins)
 
 
 def test_errors_hide_the_values(make):

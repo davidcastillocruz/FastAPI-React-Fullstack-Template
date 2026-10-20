@@ -26,7 +26,10 @@ def test_language_priority():
 
 def test_language_quality_and_fallbacks():
     assert get_language(request_with({"Accept-Language": "fr;q=1, en;q=0.5, es;q=0.9"})) == "es"
-    assert get_language(request_with({"Accept-Language": "es;q=0, en"})) == "en"
+    # q=0 means "not acceptable": es is skipped although fr comes first and isn't available
+    assert get_language(request_with({"Accept-Language": "fr, es;q=0"})) == "en"
+    # A regional tag falls back to its base language
+    assert get_language(request_with({"Accept-Language": "es-MX"})) == "es"
     assert get_language(request_with({"Accept-Language": "*, fr, es;q=bad"})) == "en"
 
 
@@ -69,7 +72,8 @@ def test_valid_file_loads(translations):
 
 
 def test_extra_language_is_ignored(translations):
-    translations({"HELLO": {"en": {"detail": "Hi"}, "es": {"detail": "Hola"}, "fr": {"detail": "Salut"}}})
+    # fr isn't in AVAILABLE_LANGUAGES: it isn't checked (a number would stop the startup) and isn't loaded
+    translations({"HELLO": {"en": {"detail": "Hi"}, "es": {"detail": "Hola"}, "fr": {"detail": 1}}})
     setup_language_system()
 
     assert set(languages.LANGUAGE_DATA["HELLO"]) == {"en", "es"}

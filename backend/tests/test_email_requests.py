@@ -1,9 +1,11 @@
 import pytest
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from src.core.limiter import limiter
 from src.database import engine
+from src.main import app
 from src.modules.email_requests.repositories import email_request_repository
 from src.modules.email_requests.services.email_request_service import PAGE_SIZE
 
@@ -40,6 +42,8 @@ async def test_create_twice_is_a_conflict(client, sent_emails):
     assert response.json() == {"detail": "This email has already asked for a test email"}
     # Only the first one sends an email
     assert len(sent_emails) == 1
+    spanish = await create(client, "ana@test.dev", params={"lang": "es"})
+    assert spanish.json() == {"detail": "Este email ya ha pedido un email de prueba"}
 
 
 async def test_create_with_an_invalid_email(client, sent_emails):
@@ -62,6 +66,18 @@ async def test_create_is_rate_limited(client):
 
     assert [response.status_code for response in responses] == [201] * 5 + [429]
     assert responses[-1].json() == {"detail": "Demasiadas peticiones, espera un momento y vuelve a intentarlo"}
+
+
+async def test_rate_limit_is_per_client_ip(client):
+    for i in range(6):
+        await create(client, f"user{i}@test.dev")
+
+    # Another IP still has its 5 requests
+    transport = ASGITransport(app=app, client=("10.0.0.2", 123))
+    async with AsyncClient(transport=transport, base_url="http://test") as other_client:
+        response = await create(other_client, "other@test.dev")
+
+    assert response.status_code == 201
 
 
 async def test_create_at_the_same_time_is_a_conflict(client, monkeypatch, sent_emails):
